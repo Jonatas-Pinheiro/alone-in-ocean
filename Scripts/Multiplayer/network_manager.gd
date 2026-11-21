@@ -39,6 +39,7 @@ func create_host() -> int:
 		return error
 
 	multiplayer.multiplayer_peer = peer
+	_disable_local_building()
 
 	# O anfitrião é o jogador de ID 1.
 	spawn_player(SERVER_ID)
@@ -61,6 +62,7 @@ func join_game(ip: String) -> int:
 		return error
 
 	multiplayer.multiplayer_peer = peer
+	_disable_local_building()
 
 	print("Conectando ao servidor: ", ip)
 
@@ -90,15 +92,27 @@ func spawn_player(id: int) -> void:
 	if world.has_node(str(id)):
 		return
 
-	var player = PLAYER_SCENE.instantiate()
+	var player: Node3D
+	if id == SERVER_ID:
+		var initial_player := world.get_node_or_null("Player")
+		if initial_player is CharacterBody3D:
+			player = initial_player
+			player.name = str(id)
 
-	player.name = str(id)
+	if player == null:
+		player = PLAYER_SCENE.instantiate()
+		player.name = str(id)
+		player.set("owner_peer_id", id)
+		player.set_multiplayer_authority(SERVER_ID, true)
+		world.add_child(player)
 
 	# Identifica quem pode enviar comandos para este personagem.
-	player.owner_peer_id = id
+	player.set("owner_peer_id", id)
 
 	# A autoridade física e de rede permanece no servidor.
 	player.set_multiplayer_authority(SERVER_ID, true)
+	if player.is_node_ready():
+		player.call("configure_owner_peer_id", id)
 
 	# Distribui os jogadores em posições diferentes.
 	var slot := id - 1
@@ -108,8 +122,6 @@ func spawn_player(id: int) -> void:
 		1.0,
 		floori(float(slot) / 4.0) * 2.0
 	)
-
-	world.add_child(player)
 
 	spawned_players[id] = true
 
@@ -201,6 +213,15 @@ func _on_server_disconnected() -> void:
 func _clear_spawned_players() -> void:
 	for id in spawned_players.keys():
 		remove_player(id)
+
+
+func _disable_local_building() -> void:
+	var world := get_parent()
+	if world == null:
+		return
+	var bootstrap := world.get_node_or_null("BuildingKitSetup")
+	if bootstrap != null and bootstrap.has_method("disable_for_multiplayer"):
+		bootstrap.call_deferred("disable_for_multiplayer")
 
 
 # --------------------------------------------------

@@ -51,10 +51,9 @@ func _initialize_building_kit() -> void:
 		push_error("Building Kit: atribua a Camera3D do jogador no Inspector.")
 		return
 
-	# O addon ainda não possui integração RPC com o GD-Sync deste projeto.
-	# Em uma sessão multiplayer, somente o servidor pode inicializá-lo localmente.
-	if multiplayer.has_multiplayer_peer() and not multiplayer.is_server():
-		push_warning("Building Kit: construção local desativada neste cliente; falta ligar os pedidos ao servidor.")
+	# As peças ainda não são replicadas; permitir construção aqui criaria estados diferentes por peer.
+	if _is_online_multiplayer():
+		push_warning("Building Kit: construção desativada em multiplayer até a replicação de peças ser implementada.")
 		return
 
 	var catalog: PKCatalog = BUILDING_CATALOG.create_catalog(ramp_bounds, ceiling_bounds)
@@ -90,3 +89,19 @@ func _initialize_building_kit() -> void:
 		build_hud = PKBuildHUD.new()
 		hud_layer.add_child(build_hud)
 		build_hud.bind(build_system)
+
+
+func disable_for_multiplayer() -> void:
+	if build_system != null:
+		build_system.input_enabled = false
+		build_system.queue_free()
+		build_system = null
+	if hud_layer != null:
+		hud_layer.queue_free()
+		hud_layer = null
+	build_hud = null
+
+
+func _is_online_multiplayer() -> bool:
+	var active_peer := multiplayer.multiplayer_peer
+	return active_peer != null and not (active_peer is OfflineMultiplayerPeer)
