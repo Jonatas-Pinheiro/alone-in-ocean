@@ -1,0 +1,3 @@
+Official pack: https://kenney.nl/assets/input-prompts
+Source mirror: https://github.com/tanuki-billie/kenney-input-prompts
+License: CC0 1.0 Universal (see LICENSE.txt)

@@ -23,6 +23,7 @@ var _level_box := HBoxContainer.new()
 var _pad := false
 
 const MODE_KEYS := ["1", "2", "3", "4", "5", "6"]
+const MODE_LABELS := ["Co", "Mo", "De", "Se", "Ap", "Re"]
 
 
 func _init() -> void:
@@ -40,7 +41,7 @@ func _init() -> void:
 		button.toggle_mode = true
 		button.button_group = group
 		button.focus_mode = Control.FOCUS_NONE
-		button.custom_minimum_size = Vector2(0, 34)
+		button.custom_minimum_size = Vector2(42, 32)
 		button.pressed.connect(func() -> void: system.set_mode(mode))
 		_row.add_child(button)
 		_mode_buttons.append(button)
@@ -63,7 +64,7 @@ func _init() -> void:
 			[_flip, func() -> void: system.flip_piece()], [_cancel, func() -> void: system.cancel()]]:
 		var button: Button = entry[0]
 		button.focus_mode = Control.FOCUS_NONE
-		button.custom_minimum_size = Vector2(0, 28)
+		button.custom_minimum_size = Vector2(34, 28)
 		button.add_theme_font_size_override(&"font_size", 13)
 		button.pressed.connect(entry[1])
 		_tools.add_child(button)
@@ -96,7 +97,7 @@ func refresh() -> void:
 			has_health = has_health or buildable.max_health > 0.0
 	for index in _mode_buttons.size():
 		var button := _mode_buttons[index]
-		button.text = ("%s " % MODE_KEYS[index] if not _pad else "") + PKText.mode_name(index)
+		button.text = MODE_LABELS[index]
 		button.tooltip_text = PKText.mode_name(index) + " (%s)" % ("X" if _pad else MODE_KEYS[index])
 		button.set_pressed_no_signal(index == mode)
 	_mode_buttons[PKBuildController.Mode.UPGRADE].visible = has_upgrades
@@ -107,13 +108,13 @@ func refresh() -> void:
 	_level_up.disabled = controller.level >= controller.max_level
 	_level_down.tooltip_text = PKText.t("Floor down") + " (PgDn)"
 	_level_up.tooltip_text = PKText.t("Floor up") + (" (D-pad up)" if _pad else " (PgUp)")
-	_undo.text = PKText.t("Undo")
+	_undo.text = "↶"
 	_undo.tooltip_text = PKText.t("Undo") + (" (Back)" if _pad else " (Ctrl+Z)")
-	_rotate.text = PKText.t("Rotate")
+	_rotate.text = "↻"
 	_rotate.tooltip_text = PKText.t("Rotate") + (" (RB / LB)" if _pad else " (R / Shift+R)")
-	_flip.text = PKText.t("Flip")
+	_flip.text = "F"
 	_flip.tooltip_text = PKText.t("Flip") + (" (Y)" if _pad else " (F)")
-	_cancel.text = PKText.t("Cancel")
+	_cancel.text = "×"
 	_cancel.tooltip_text = PKText.t("Cancel") + (" (B)" if _pad else " (Esc)")
 	var piece: PKBuildable = controller.get_active_buildable()
 	_rotate.visible = show_touch_buttons

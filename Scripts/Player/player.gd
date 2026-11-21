@@ -23,6 +23,7 @@ const ACTION_RIGHT := &"move_right"
 const ACTION_FORWARD := &"move_forward"
 const ACTION_BACK := &"move_back"
 const ACTION_JUMP := &"jump"
+const ACTION_SPRINT := &"sprint"
 const ACTION_INTERACT := &"interact"
 const ACTION_EAT := &"consume_food"
 const ACTION_DRINK := &"drink_water"
@@ -34,6 +35,7 @@ const DEFAULT_KEYS := {
 	&"move_left": KEY_A,
 	&"move_right": KEY_D,
 	&"jump": KEY_SPACE,
+	&"sprint": KEY_SHIFT,
 	&"interact": KEY_E,
 	&"consume_food": KEY_F,
 	&"drink_water": KEY_G,
@@ -49,6 +51,7 @@ const SYNC_PATHS: Array[NodePath] = [
 	^".:hunger",
 	^".:thirst",
 	^".:health",
+	^".:stamina",
 	^".:wood_count",
 	^".:plastic_count",
 	^".:scrap_count",
@@ -89,6 +92,7 @@ var owner_peer_id := 0
 var hunger := 100.0
 var thirst := 100.0
 var health := 100.0
+var stamina := 100.0
 var wood_count := 0
 var plastic_count := 0
 var scrap_count := 0
@@ -119,7 +123,13 @@ var _in_move := Vector2.ZERO
 var _in_yaw := 0.0
 var _in_pitch := 0.0
 var _in_jump_held := false
+var _in_sprint := false
 var _jump_requested := false
+
+var _touch_move := Vector2.ZERO
+var _touch_jump := false
+var _touch_sprint := false
+var _sprint_recovery := false
 
 # Anti-flood (servidor)
 var _rate_window_start_ms := 0
@@ -131,6 +141,7 @@ var _sent_move := Vector2.ZERO
 var _sent_yaw := 0.0
 var _sent_pitch := 0.0
 var _sent_jump := false
+var _sent_sprint := false
 var _ticks_since_send := 999
 
 var _idle_ticks := 0
@@ -353,6 +364,25 @@ func _request_survival_action(action: String, pickup_id: int = -1) -> void:
 		manager.rpc_id(SERVER_ID, "request_action", action, pickup_id)
 
 
+func set_touch_move(value: Vector2) -> void:
+	_touch_move = value.limit_length(1.0) if _is_local else Vector2.ZERO
+
+
+func set_touch_jump(pressed: bool) -> void:
+	_touch_jump = pressed if _is_local else false
+
+
+func set_touch_sprint(pressed: bool) -> void:
+	_touch_sprint = pressed if _is_local else false
+
+
+func apply_touch_look(relative: Vector2) -> void:
+	if not _is_local:
+		return
+	_yaw = wrapf(_yaw - relative.x * 0.0032, -PI, PI)
+	_pitch = clampf(_pitch - relative.y * 0.0032, -MAX_PITCH, MAX_PITCH)
+
+
 # ---------------------------------------------------------------------------
 # VISUAL (por frame) — somente o jogador local
 # ---------------------------------------------------------------------------
@@ -494,13 +524,16 @@ func _push_local_input() -> void:
 		ACTION_FORWARD,
 		ACTION_BACK
 	)
+	if _touch_move.length_squared() > 0.0001:
+		move = _touch_move
 
-	var jump := Input.is_action_pressed(ACTION_JUMP)
+	var jump := Input.is_action_pressed(ACTION_JUMP) or _touch_jump
+	var sprint := Input.is_action_pressed(ACTION_SPRINT) or _touch_sprint
 
 	# O anfitrião aplica sua própria entrada diretamente.
 	if _is_server:
 		if _is_auth:
-			_apply_input(move, _yaw, _pitch, jump)
+			_apply_input(move, _yaw, _pitch, jump, sprint)
 
 		return
 
@@ -518,6 +551,7 @@ func _push_local_input() -> void:
 
 	var changed := (
 		jump != _sent_jump
+		or sprint != _sent_sprint
 		or not move.is_equal_approx(_sent_move)
 		or absf(_yaw - _sent_yaw) > INPUT_EPSILON
 		or absf(_pitch - _sent_pitch) > INPUT_EPSILON
@@ -530,9 +564,10 @@ func _push_local_input() -> void:
 	_sent_yaw = _yaw
 	_sent_pitch = _pitch
 	_sent_jump = jump
+	_sent_sprint = sprint
 	_ticks_since_send = 0
 
-	submit_input.rpc_id(SERVER_ID, move, _yaw, _pitch, jump)
+	submit_input.rpc_id(SERVER_ID, move, _yaw, _pitch, jump, sprint)
 
 
 # ---------------------------------------------------------------------------
@@ -544,7 +579,8 @@ func submit_input(
 	move: Vector2,
 	yaw: float,
 	pitch: float,
-	jump: bool
+	jump: bool,
+	sprint: bool
 ) -> void:
 
 	if not _is_server or not _is_auth:
@@ -564,14 +600,15 @@ func submit_input(
 	if _rate_count > _rate_limit:
 		return
 
-	_apply_input(move, yaw, pitch, jump)
+	_apply_input(move, yaw, pitch, jump, sprint)
 
 
 func _apply_input(
 	move: Vector2,
 	yaw: float,
 	pitch: float,
-	jump: bool
+	jump: bool,
+	sprint: bool
 ) -> void:
 
 	if not move.is_finite():
@@ -583,6 +620,7 @@ func _apply_input(
 	_in_move = move.limit_length(1.0)
 	_in_yaw = wrapf(yaw, -PI, PI)
 	_in_pitch = clampf(pitch, -MAX_PITCH, MAX_PITCH)
+	_in_sprint = sprint
 
 	if jump and not _in_jump_held:
 		_jump_requested = true
@@ -595,6 +633,17 @@ func _apply_input(
 # ---------------------------------------------------------------------------
 
 func _simulate(delta: float) -> void:
+	var wants_sprint := _in_sprint and _in_move.length_squared() > 0.01
+	var sprinting := wants_sprint and not _sprint_recovery and stamina > 0.0
+	if sprinting:
+		stamina = maxf(0.0, stamina - 22.0 * delta)
+		if stamina <= 0.0:
+			_sprint_recovery = true
+	else:
+		stamina = minf(100.0, stamina + 16.0 * delta)
+		if _sprint_recovery and stamina >= 20.0:
+			_sprint_recovery = false
+
 	# Jogador parado no chão: pula a simulação na maior parte dos ticks.
 	# Uma checagem periódica garante que ele caia se o chão sumir.
 	var idle := (
@@ -630,9 +679,10 @@ func _simulate(delta: float) -> void:
 	# Equivale a basis * Vector3(x, 0, y), sem alocar vetores temporários.
 	var wish := basis.x * _in_move.x + basis.z * _in_move.y
 	var step := acceleration * delta
+	var movement_speed := speed * (1.5 if sprinting else 1.0)
 
-	velocity.x = move_toward(velocity.x, wish.x * speed, step)
-	velocity.z = move_toward(velocity.z, wish.z * speed, step)
+	velocity.x = move_toward(velocity.x, wish.x * movement_speed, step)
+	velocity.z = move_toward(velocity.z, wish.z * movement_speed, step)
 
 	move_and_slide()
 

@@ -39,6 +39,12 @@ func _unhandled_input(event: InputEvent) -> void:
 	super._unhandled_input(event)
 
 
+func submit_touch_action() -> void:
+	if not input_enabled:
+		return
+	_submit_current_action(_current_aim())
+
+
 func _submit_current_action(aim: PKAim) -> void:
 	controller.aim(aim)
 	if network == null:
