@@ -184,6 +184,7 @@ func _collect_pickup(player: SurvivalPlayer, pickup_id: int) -> void:
 			player.water_count = mini(player.water_count + pickup.amount, MAX_STACK)
 
 	pickup.queue_free()
+	_play_player_action(player, "PickUp")
 
 
 func _consume_food(player: SurvivalPlayer) -> void:
@@ -191,6 +192,7 @@ func _consume_food(player: SurvivalPlayer) -> void:
 		return
 	player.food_count -= 1
 	player.hunger = minf(100.0, player.hunger + 35.0)
+	_play_player_action(player, "Use_Item")
 
 
 func _consume_water(player: SurvivalPlayer) -> void:
@@ -198,6 +200,14 @@ func _consume_water(player: SurvivalPlayer) -> void:
 		return
 	player.water_count -= 1
 	player.thirst = minf(100.0, player.thirst + 45.0)
+	_play_player_action(player, "Use_Item")
+
+
+func _play_player_action(player: SurvivalPlayer, animation_name: String) -> void:
+	if multiplayer.has_multiplayer_peer():
+		player.play_visual_action.rpc(animation_name)
+	else:
+		player.play_visual_action(animation_name)
 
 
 func _tick_survival(seconds: float) -> void:

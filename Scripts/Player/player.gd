@@ -227,6 +227,12 @@ func set_display_name(value: String) -> void:
 		_name_tag.text = display_name
 
 
+@rpc("authority", "call_local", "reliable")
+func play_visual_action(animation_name: String) -> void:
+	if body_model != null and body_model.has_method("play_action"):
+		body_model.call("play_action", animation_name)
+
+
 func _create_name_tag() -> void:
 	_name_tag = Label3D.new()
 	_name_tag.name = "NameTag"

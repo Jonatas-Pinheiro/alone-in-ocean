@@ -2,6 +2,20 @@ extends Area3D
 class_name SalvagePickup
 
 const SERVER_ID := 1
+const PICKUP_VISUALS := {
+	&"wood": preload("res://Assets/KayKit/RPGToolsBits/gltf/axe.gltf"),
+	&"plastic": preload("res://Assets/KayKit/RPGToolsBits/gltf/rope_bundle_A.gltf"),
+	&"scrap": preload("res://Assets/KayKit/RPGToolsBits/gltf/hammer.gltf"),
+	&"food": preload("res://Assets/KayKit/RPGToolsBits/gltf/knife.gltf"),
+	&"water": preload("res://Assets/KayKit/RPGToolsBits/gltf/bucket_metal.gltf"),
+}
+const PICKUP_VISUAL_SCALES := {
+	&"wood": 0.42,
+	&"plastic": 0.36,
+	&"scrap": 0.45,
+	&"food": 0.38,
+	&"water": 0.52,
+}
 
 @export var pickup_id := 0
 @export var resource_kind: StringName = &"wood"
@@ -26,10 +40,19 @@ func _enter_tree() -> void:
 
 func _ready() -> void:
 	add_to_group("salvage_pickups")
-	var material := StandardMaterial3D.new()
-	material.roughness = 0.9
-	material.albedo_color = _color_for_kind()
-	visual.material_override = material
+	var pickup_scene := PICKUP_VISUALS.get(resource_kind) as PackedScene
+	if pickup_scene != null:
+		visual.mesh = null
+		visual.material_override = null
+		var pickup_model := pickup_scene.instantiate() as Node3D
+		pickup_model.name = "KayKitPickupVisual"
+		pickup_model.scale = Vector3.ONE * float(PICKUP_VISUAL_SCALES.get(resource_kind, 0.45))
+		visual.add_child(pickup_model)
+	else:
+		var material := StandardMaterial3D.new()
+		material.roughness = 0.9
+		material.albedo_color = _color_for_kind()
+		visual.material_override = material
 
 
 func _physics_process(delta: float) -> void:
