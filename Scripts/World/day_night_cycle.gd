@@ -19,6 +19,7 @@ var _panorama_material: PanoramaSkyMaterial
 var _elapsed_seconds := 0.0
 var _session_active := false
 var _sync_timer := 0.0
+var _last_hud_second := -1
 
 var _hud: CanvasLayer
 var _time_label: Label
@@ -44,7 +45,8 @@ func _process(delta: float) -> void:
 	var session_is_active := _network_manager != null \
 		and _network_manager.has_method("is_session_active") \
 		and bool(_network_manager.call("is_session_active"))
-	if session_is_active != _session_active:
+	var session_changed := session_is_active != _session_active
+	if session_changed:
 		_session_active = session_is_active
 		if _session_active:
 			# Toda sessão começa ao amanhecer; o anfitrião mantém o relógio canônico.
@@ -54,15 +56,20 @@ func _process(delta: float) -> void:
 			_sync_timer = 0.0
 		if _hud != null:
 			_hud.visible = _session_active
-		_apply_world_state()
-		_update_hud()
 
 	if not _session_active:
+		if session_changed:
+			_apply_world_state()
+			_update_hud()
+			_last_hud_second = int(floor(_elapsed_seconds))
 		return
 
 	_elapsed_seconds = fposmod(_elapsed_seconds + delta, CYCLE_DURATION_SECONDS)
 	_apply_world_state()
-	_update_hud()
+	var hud_second := int(floor(_elapsed_seconds))
+	if hud_second != _last_hud_second:
+		_last_hud_second = hud_second
+		_update_hud()
 
 	if multiplayer.has_multiplayer_peer() and multiplayer.is_server():
 		_sync_timer += delta
@@ -78,6 +85,7 @@ func _receive_clock(server_elapsed_seconds: float) -> void:
 		return
 	_elapsed_seconds = fposmod(server_elapsed_seconds, CYCLE_DURATION_SECONDS)
 	_apply_world_state()
+	_last_hud_second = int(floor(_elapsed_seconds))
 	_update_hud()
 
 

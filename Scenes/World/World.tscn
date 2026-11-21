@@ -31,7 +31,7 @@ uv1_triplanar = true
 
 [sub_resource type="PlaneMesh" id="PlaneMesh_f5ye2"]
 material = SubResource("StandardMaterial3D_yns2c")
-size = Vector2(200, 200)
+size = Vector2(600, 600)
 subdivide_width = 31
 subdivide_depth = 31
 

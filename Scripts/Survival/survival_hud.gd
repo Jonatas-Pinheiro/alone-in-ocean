@@ -7,6 +7,8 @@ const ICON_THIRST := preload("res://Assets/UI/status_thirst.svg")
 const ICON_STAMINA := preload("res://Assets/UI/status_stamina.svg")
 const PICKUP_SOUND := preload("res://Assets/Audio/pickup_chime.wav")
 const INVENTORY_NAMES: Array[String] = ["Madeira", "Plástico", "Sucata", "Comida", "Água"]
+const UI_REFRESH_INTERVAL := 0.1
+const BUILD_SYSTEM_REFRESH_INTERVAL := 0.5
 
 
 class CenterAimDot extends Control:
@@ -41,6 +43,8 @@ var _pickup_audio: AudioStreamPlayer
 var _pickup_feedback: Label
 var _pickup_feedback_time := 0.0
 var _slot_feedback_tweens: Dictionary = {}
+var _ui_refresh_elapsed := 0.0
+var _build_system_refresh_elapsed := 0.0
 
 
 func _ready() -> void:
@@ -52,15 +56,30 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	_update_pickup_feedback(delta)
 	var local_id := multiplayer.get_unique_id()
 	if not is_instance_valid(_player) or _player.owner_peer_id != local_id:
 		_player = _find_local_player(local_id)
 		_last_counts.clear()
 
-	_root.visible = _player != null
-	_mobile_controls.visible = _player != null and bool(_mobile_controls.get("touch_enabled"))
-	if _player == null:
+	var has_player := _player != null
+	if _root.visible != has_player:
+		_root.visible = has_player
+	var touch_controls_visible := has_player and bool(_mobile_controls.get("touch_enabled"))
+	if _mobile_controls.visible != touch_controls_visible:
+		_mobile_controls.visible = touch_controls_visible
+	if not has_player:
 		return
+
+	_build_system_refresh_elapsed += delta
+	if _build_system_refresh_elapsed >= BUILD_SYSTEM_REFRESH_INTERVAL:
+		_build_system_refresh_elapsed = fposmod(_build_system_refresh_elapsed, BUILD_SYSTEM_REFRESH_INTERVAL)
+		_update_build_system()
+
+	_ui_refresh_elapsed += delta
+	if _ui_refresh_elapsed < UI_REFRESH_INTERVAL:
+		return
+	_ui_refresh_elapsed = fposmod(_ui_refresh_elapsed, UI_REFRESH_INTERVAL)
 
 	_bars[&"health"].value = _player.health
 	_bars[&"hunger"].value = _player.hunger
@@ -80,8 +99,6 @@ func _process(delta: float) -> void:
 		_eat_button.visible = show_eat_button
 		_drink_button.visible = show_drink_button
 		_layout_all()
-	_update_build_system()
-	_update_pickup_feedback(delta)
 
 
 func _find_local_player(peer_id: int) -> SurvivalPlayer:
@@ -133,10 +150,10 @@ func _build_interface() -> void:
 	consumables.add_child(_drink_button)
 
 	_build_button = Button.new()
-	_build_button.text = "Construir"
+	_build_button.text = "Construir [V]"
 	_build_button.custom_minimum_size = Vector2(96.0, 36.0)
 	_build_button.focus_mode = Control.FOCUS_NONE
-	_build_button.tooltip_text = "Abrir menu compacto de construção"
+	_build_button.tooltip_text = "Abrir menu de construção (tecla V)"
 	_build_button.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	_build_button.offset_left = -108.0
 	_build_button.offset_right = -12.0
@@ -183,8 +200,8 @@ func _build_interface() -> void:
 	menu_column.add_theme_constant_override("separation", 5)
 	_build_menu.add_child(menu_column)
 	var menu_title := Label.new()
-	menu_title.text = "Peças"
-	menu_title.add_theme_font_size_override("font_size", 11)
+	menu_title.text = "Peças · Setas/Tab + Enter"
+	menu_title.add_theme_font_size_override("font_size", 9)
 	menu_column.add_child(menu_title)
 	_build_grid = GridContainer.new()
 	_build_grid.columns = 2
@@ -192,9 +209,9 @@ func _build_interface() -> void:
 	_build_grid.add_theme_constant_override("v_separation", 5)
 	menu_column.add_child(_build_grid)
 	var rotate_button := Button.new()
-	rotate_button.text = "Girar peça"
+	rotate_button.text = "Girar peça [R]"
 	rotate_button.custom_minimum_size = Vector2(0.0, 28.0)
-	rotate_button.focus_mode = Control.FOCUS_NONE
+	rotate_button.focus_mode = Control.FOCUS_ALL
 	rotate_button.add_theme_font_size_override("font_size", 10)
 	rotate_button.pressed.connect(_rotate_build_piece)
 	menu_column.add_child(rotate_button)
@@ -224,7 +241,7 @@ func _build_interface() -> void:
 	_inventory_details.add_theme_color_override("font_color", Color(0.85, 0.91, 0.96, 0.96))
 	inventory_column.add_child(_inventory_details)
 	var inventory_hint := Label.new()
-	inventory_hint.text = "Clique em Comida ou Água na barra para usar."
+	inventory_hint.text = "F: comer · G: beber · E: coletar"
 	inventory_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	inventory_hint.add_theme_font_size_override("font_size", 9)
 	inventory_hint.add_theme_color_override("font_color", Color(0.65, 0.78, 0.84, 0.9))
@@ -343,7 +360,8 @@ func _update_build_system() -> void:
 	var scene := get_tree().current_scene
 	var setup := scene.get_node_or_null("BuildingKitSetup") if scene != null else null
 	var candidate: Node = setup.get("build_system") as Node if setup != null else null
-	if candidate != _build_system:
+	var system_changed := candidate != _build_system
+	if system_changed:
 		_build_system = candidate
 		_build_menu.visible = false
 		_mobile_controls.set_menu_open(false)
@@ -358,9 +376,10 @@ func _update_build_system() -> void:
 		native_hud.mode_bar.visible = true
 		native_hud.catalog_panel.visible = false
 		native_hud.info_panel.visible = false
-		_layout_native_mode_bar()
-		_layout_build_menu()
-		_layout_inventory_panel()
+		if system_changed:
+			_layout_native_mode_bar()
+			_layout_build_menu()
+			_layout_inventory_panel()
 
 
 func _rebuild_build_menu() -> void:
@@ -378,7 +397,7 @@ func _rebuild_build_menu() -> void:
 		button.text = buildable.get_title()
 		button.tooltip_text = buildable.description
 		button.custom_minimum_size = Vector2(82.0, 34.0)
-		button.focus_mode = Control.FOCUS_NONE
+		button.focus_mode = Control.FOCUS_ALL
 		button.add_theme_font_size_override("font_size", 10)
 		button.pressed.connect(_select_buildable.bind(buildable))
 		_build_grid.add_child(button)
@@ -390,6 +409,16 @@ func _toggle_build_menu() -> void:
 	_inventory_panel.visible = false
 	_build_menu.visible = not _build_menu.visible
 	_mobile_controls.set_menu_open(_build_menu.visible)
+	if _build_menu.visible:
+		_focus_first_build_option()
+
+
+func _focus_first_build_option() -> void:
+	for child in _build_grid.get_children():
+		var button := child as Button
+		if button != null and button.visible:
+			button.grab_focus()
+			return
 
 
 func _toggle_inventory() -> void:
@@ -626,6 +655,11 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	if key.keycode == KEY_I:
 		_toggle_inventory()
 		get_viewport().set_input_as_handled()
+	elif key.keycode == KEY_V:
+		_update_build_system()
+		if _build_system != null:
+			_toggle_build_menu()
+			get_viewport().set_input_as_handled()
 
 
 func _select_buildable(buildable: PKBuildable) -> void:
