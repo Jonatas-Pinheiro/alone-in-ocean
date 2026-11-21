@@ -355,9 +355,12 @@ func _update_build_system() -> void:
 
 	var native_hud := scene.get_node_or_null("BuildingHUDLayer/PKBuildHUD") as PKBuildHUD
 	if native_hud != null:
-		native_hud.mode_bar.visible = false
+		native_hud.mode_bar.visible = true
 		native_hud.catalog_panel.visible = false
 		native_hud.info_panel.visible = false
+		_layout_native_mode_bar()
+		_layout_build_menu()
+		_layout_inventory_panel()
 
 
 func _rebuild_build_menu() -> void:
@@ -479,6 +482,7 @@ func _layout_all() -> void:
 		return
 	_layout_status_panel()
 	_layout_action_buttons()
+	_layout_native_mode_bar()
 	_layout_build_menu()
 	_layout_inventory_panel()
 	_layout_hotbar()
@@ -492,6 +496,32 @@ func _layout_status_panel() -> void:
 func _compact_action_top() -> float:
 	var status_height := maxf(_status_panel.size.y, _status_panel.get_combined_minimum_size().y)
 	return _status_panel.position.y + status_height + 8.0
+
+
+func _layout_native_mode_bar() -> void:
+	var scene := get_tree().current_scene
+	if scene == null:
+		return
+	var native_hud := scene.get_node_or_null("BuildingHUDLayer/PKBuildHUD") as PKBuildHUD
+	if native_hud == null:
+		return
+	var mode_bar := native_hud.mode_bar
+	mode_bar.visible = true
+	mode_bar.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	var top := _compact_action_top() + 44.0 if _root.size.x < 680.0 else _compact_action_top()
+	mode_bar.position = Vector2(12.0, top)
+
+
+func _compact_menu_top() -> float:
+	var top := _compact_action_top() + 44.0
+	var scene := get_tree().current_scene
+	if scene == null:
+		return top
+	var native_hud := scene.get_node_or_null("BuildingHUDLayer/PKBuildHUD") as PKBuildHUD
+	if native_hud == null or not native_hud.mode_bar.visible:
+		return top
+	var bar_height := maxf(native_hud.mode_bar.size.y, native_hud.mode_bar.get_combined_minimum_size().y)
+	return native_hud.mode_bar.position.y + bar_height + 8.0
 
 
 func _layout_action_buttons() -> void:
@@ -529,7 +559,7 @@ func _layout_build_menu() -> void:
 	if _build_menu == null:
 		return
 	if _root.size.x < 680.0:
-		var menu_top := _compact_action_top() + 44.0
+		var menu_top := _compact_menu_top()
 		var menu_width := minf(224.0, maxf(160.0, _root.size.x - 24.0))
 		_build_menu.set_anchors_preset(Control.PRESET_TOP_LEFT)
 		_build_menu.offset_left = 12.0
@@ -548,7 +578,7 @@ func _layout_inventory_panel() -> void:
 	if _inventory_panel == null:
 		return
 	if _root.size.x < 680.0:
-		var panel_top := _compact_action_top() + 44.0
+		var panel_top := _compact_menu_top()
 		var panel_width := minf(224.0, maxf(160.0, _root.size.x - 24.0))
 		_inventory_panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
 		_inventory_panel.offset_left = 12.0
