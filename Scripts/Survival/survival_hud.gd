@@ -5,6 +5,7 @@ const ICON_HEALTH := preload("res://Assets/UI/status_health.svg")
 const ICON_HUNGER := preload("res://Assets/UI/status_hunger.svg")
 const ICON_THIRST := preload("res://Assets/UI/status_thirst.svg")
 const ICON_STAMINA := preload("res://Assets/UI/status_stamina.svg")
+const INVENTORY_NAMES: Array[String] = ["Madeira", "Plástico", "Sucata", "Comida", "Água"]
 
 var _root: Control
 var _player: SurvivalPlayer
@@ -18,18 +19,29 @@ var _build_button: Button
 var _build_menu: PanelContainer
 var _build_grid: GridContainer
 var _build_system: Node
+var _inventory_button: Button
+var _inventory_panel: PanelContainer
+var _inventory_details: Label
+var _hotbar_panel: PanelContainer
+var _hotbar_buttons: Array[Button] = []
+var _last_counts: Array[int] = []
+var _selected_hotbar_slot := 0
+var _last_selected_hotbar_slot := -1
 
 
 func _ready() -> void:
 	layer = 5
+	set_process_unhandled_key_input(true)
 	_build_interface()
 	_create_mobile_controls()
+	_layout_hotbar()
 
 
 func _process(_delta: float) -> void:
 	var local_id := multiplayer.get_unique_id()
 	if not is_instance_valid(_player) or _player.owner_peer_id != local_id:
 		_player = _find_local_player(local_id)
+		_last_counts.clear()
 
 	_root.visible = _player != null
 	_mobile_controls.visible = _player != null and bool(_mobile_controls.get("touch_enabled"))
@@ -40,13 +52,14 @@ func _process(_delta: float) -> void:
 	_bars[&"hunger"].value = _player.hunger
 	_bars[&"thirst"].value = _player.thirst
 	_bars[&"stamina"].value = _player.stamina
-	_inventory_label.text = "M %02d  P %02d  S %02d   Comida %d  Água %d" % [
+	_inventory_label.text = "M %02d · P %02d · S %02d\nComida %02d · Água %02d" % [
 		_player.wood_count,
 		_player.plastic_count,
 		_player.scrap_count,
 		_player.food_count,
 		_player.water_count,
 	]
+	_update_inventory_display()
 	_eat_button.visible = _mobile_controls.touch_enabled and _player.food_count > 0 and _player.hunger < 98.0
 	_drink_button.visible = _mobile_controls.touch_enabled and _player.water_count > 0 and _player.thirst < 98.0
 	_update_build_system()
@@ -118,6 +131,21 @@ func _build_interface() -> void:
 	_build_button.pressed.connect(_toggle_build_menu)
 	_root.add_child(_build_button)
 
+	_inventory_button = Button.new()
+	_inventory_button.text = "Inventário [I]"
+	_inventory_button.custom_minimum_size = Vector2(96.0, 36.0)
+	_inventory_button.focus_mode = Control.FOCUS_NONE
+	_inventory_button.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	_inventory_button.offset_left = -212.0
+	_inventory_button.offset_right = -112.0
+	_inventory_button.offset_top = 12.0
+	_inventory_button.offset_bottom = 48.0
+	_inventory_button.add_theme_font_size_override("font_size", 11)
+	_inventory_button.add_theme_stylebox_override("normal", _button_style(Color(0.04, 0.12, 0.18, 0.82)))
+	_inventory_button.add_theme_stylebox_override("hover", _button_style(Color(0.08, 0.25, 0.32, 0.94)))
+	_inventory_button.pressed.connect(_toggle_inventory)
+	_root.add_child(_inventory_button)
+
 	_build_menu = PanelContainer.new()
 	_build_menu.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	_build_menu.offset_left = -204.0
@@ -152,6 +180,63 @@ func _build_interface() -> void:
 	rotate_button.add_theme_font_size_override("font_size", 10)
 	rotate_button.pressed.connect(_rotate_build_piece)
 	menu_column.add_child(rotate_button)
+
+	_inventory_panel = PanelContainer.new()
+	_inventory_panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	_inventory_panel.offset_left = -212.0
+	_inventory_panel.offset_right = -12.0
+	_inventory_panel.offset_top = 56.0
+	_inventory_panel.offset_bottom = 190.0
+	_inventory_panel.add_theme_stylebox_override("panel", _panel_style())
+	_inventory_panel.add_theme_constant_override("margin_left", 10)
+	_inventory_panel.add_theme_constant_override("margin_right", 10)
+	_inventory_panel.add_theme_constant_override("margin_top", 8)
+	_inventory_panel.add_theme_constant_override("margin_bottom", 8)
+	_inventory_panel.visible = false
+	_root.add_child(_inventory_panel)
+	var inventory_column := VBoxContainer.new()
+	inventory_column.add_theme_constant_override("separation", 4)
+	_inventory_panel.add_child(inventory_column)
+	var inventory_title := Label.new()
+	inventory_title.text = "Inventário"
+	inventory_title.add_theme_font_size_override("font_size", 14)
+	inventory_column.add_child(inventory_title)
+	_inventory_details = Label.new()
+	_inventory_details.add_theme_font_size_override("font_size", 11)
+	_inventory_details.add_theme_color_override("font_color", Color(0.85, 0.91, 0.96, 0.96))
+	inventory_column.add_child(_inventory_details)
+	var inventory_hint := Label.new()
+	inventory_hint.text = "Clique em Comida ou Água na barra para usar."
+	inventory_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	inventory_hint.add_theme_font_size_override("font_size", 9)
+	inventory_hint.add_theme_color_override("font_color", Color(0.65, 0.78, 0.84, 0.9))
+	inventory_column.add_child(inventory_hint)
+
+	_hotbar_panel = PanelContainer.new()
+	_hotbar_panel.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	_hotbar_panel.add_theme_stylebox_override("panel", _panel_style())
+	_hotbar_panel.add_theme_constant_override("margin_left", 6)
+	_hotbar_panel.add_theme_constant_override("margin_right", 6)
+	_hotbar_panel.add_theme_constant_override("margin_top", 5)
+	_hotbar_panel.add_theme_constant_override("margin_bottom", 5)
+	_root.add_child(_hotbar_panel)
+	var hotbar_row := HBoxContainer.new()
+	hotbar_row.add_theme_constant_override("separation", 4)
+	_hotbar_panel.add_child(hotbar_row)
+	for index in range(INVENTORY_NAMES.size()):
+		var slot := Button.new()
+		slot.name = "HotbarSlot%d" % (index + 1)
+		slot.text = "%s\n00" % INVENTORY_NAMES[index]
+		slot.custom_minimum_size = Vector2(56.0, 46.0)
+		slot.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		slot.focus_mode = Control.FOCUS_NONE
+		slot.add_theme_font_size_override("font_size", 9)
+		slot.add_theme_stylebox_override("normal", _button_style(Color(0.08, 0.20, 0.27, 0.94)))
+		slot.add_theme_stylebox_override("hover", _button_style(Color(0.10, 0.34, 0.43, 0.98)))
+		slot.add_theme_stylebox_override("pressed", _button_style(Color(0.13, 0.40, 0.49, 0.98)))
+		slot.pressed.connect(_activate_hotbar_slot.bind(index))
+		hotbar_row.add_child(slot)
+		_hotbar_buttons.append(slot)
 	_layout_build_menu()
 
 
@@ -163,7 +248,10 @@ func _create_mobile_controls() -> void:
 	_mobile_controls.look_changed.connect(_on_touch_look)
 	_mobile_controls.action_held.connect(_on_touch_action_held)
 	_mobile_controls.action_pressed.connect(_on_touch_action_pressed)
-	_mobile_controls.set_reserved_controls([_status_panel, _build_button, _build_menu])
+	_mobile_controls.set_reserved_controls([
+		_status_panel, _build_button, _inventory_button, _build_menu,
+		_inventory_panel, _hotbar_panel,
+	])
 
 
 func _make_stat_row(parent: VBoxContainer, title: String, icon_texture: Texture2D, fill_color: Color) -> ProgressBar:
@@ -258,8 +346,51 @@ func _rebuild_build_menu() -> void:
 func _toggle_build_menu() -> void:
 	if _build_system == null:
 		return
+	_inventory_panel.visible = false
 	_build_menu.visible = not _build_menu.visible
 	_mobile_controls.set_menu_open(_build_menu.visible)
+
+
+func _toggle_inventory() -> void:
+	if _player == null:
+		return
+	_build_menu.visible = false
+	_inventory_panel.visible = not _inventory_panel.visible
+	_mobile_controls.set_menu_open(_inventory_panel.visible)
+
+
+func _activate_hotbar_slot(index: int) -> void:
+	if _player == null or index < 0 or index >= INVENTORY_NAMES.size():
+		return
+	_selected_hotbar_slot = index
+	if index == 3:
+		_player.call("_request_survival_action", "eat")
+	elif index == 4:
+		_player.call("_request_survival_action", "drink")
+	_update_inventory_display()
+
+
+func _update_inventory_display() -> void:
+	if _player == null:
+		return
+	var counts: Array[int] = [
+		_player.wood_count,
+		_player.plastic_count,
+		_player.scrap_count,
+		_player.food_count,
+		_player.water_count,
+	]
+	if counts == _last_counts and _selected_hotbar_slot == _last_selected_hotbar_slot:
+		return
+	_last_counts = counts.duplicate()
+	_last_selected_hotbar_slot = _selected_hotbar_slot
+	_inventory_details.text = "Madeira: %d\nPlástico: %d\nSucata: %d\nComida: %d\nÁgua: %d" % counts
+	for index in range(_hotbar_buttons.size()):
+		var slot := _hotbar_buttons[index]
+		slot.text = "%s\n%02d" % [INVENTORY_NAMES[index], counts[index]]
+		slot.tooltip_text = "%s: %d" % [INVENTORY_NAMES[index], counts[index]]
+		var color := Color(0.10, 0.34, 0.43, 0.98) if index == _selected_hotbar_slot else Color(0.08, 0.20, 0.27, 0.94)
+		slot.add_theme_stylebox_override("normal", _button_style(color))
 
 
 func _layout_build_menu() -> void:
@@ -277,6 +408,43 @@ func _layout_build_menu() -> void:
 		_build_menu.offset_right = -12.0
 		_build_menu.offset_top = 56.0
 		_build_menu.offset_bottom = 192.0
+	_layout_inventory_panel()
+	_layout_hotbar()
+
+
+func _layout_inventory_panel() -> void:
+	if _inventory_panel == null:
+		return
+	_inventory_panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	_inventory_panel.offset_left = -212.0
+	_inventory_panel.offset_right = -12.0
+	_inventory_panel.offset_top = 56.0
+	_inventory_panel.offset_bottom = 190.0
+
+
+func _layout_hotbar() -> void:
+	if _hotbar_panel == null or _root == null:
+		return
+	var slot_width := clampf((_root.size.x - 64.0) / 5.0, 32.0, 64.0)
+	var panel_width := slot_width * 5.0 + 32.0
+	var mobile := _mobile_controls != null and bool(_mobile_controls.get("touch_enabled"))
+	var bottom_offset := -136.0 if mobile else -12.0
+	_hotbar_panel.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	_hotbar_panel.offset_left = -panel_width * 0.5
+	_hotbar_panel.offset_right = panel_width * 0.5
+	_hotbar_panel.offset_top = bottom_offset - 56.0
+	_hotbar_panel.offset_bottom = bottom_offset
+	for slot in _hotbar_buttons:
+		slot.custom_minimum_size = Vector2(slot_width, 46.0)
+
+
+func _unhandled_key_input(event: InputEvent) -> void:
+	var key := event as InputEventKey
+	if _player == null or key == null or not key.pressed or key.echo:
+		return
+	if key.keycode == KEY_I:
+		_toggle_inventory()
+		get_viewport().set_input_as_handled()
 
 
 func _select_buildable(buildable: PKBuildable) -> void:

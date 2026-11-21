@@ -192,6 +192,12 @@ func _ready() -> void:
 	_is_server = _mp.is_server()
 	_is_auth = is_multiplayer_authority()
 	_rate_limit = Engine.physics_ticks_per_second * 2
+	if not is_instance_valid(body_model):
+		body_model = get_node_or_null("KayKitVisual") as Node3D
+	if body_model != null:
+		body_model.visible = not _is_local
+	if _name_tag != null:
+		_name_tag.visible = not _is_local
 
 	_yaw = rotation.y
 	_pitch = camera.rotation.x
@@ -214,9 +220,6 @@ func _ready() -> void:
 	if _is_local:
 		_ensure_input_actions()
 		camera.make_current()
-
-		if body_model != null:
-			body_model.visible = false
 
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	else:

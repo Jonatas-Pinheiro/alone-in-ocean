@@ -14,7 +14,7 @@ const MAX_STACK := 99
 @export_range(2.0, 60.0, 1.0) var spawn_interval := 8.0
 @export_range(4.0, 20.0, 0.5) var spawn_radius_min := 5.0
 @export_range(5.0, 24.0, 0.5) var spawn_radius_max := 15.0
-@export var water_level := -3.85
+@export var water_level := 0.3
 @export_range(3.0, 12.0, 0.5) var interaction_range := 8.0
 
 @export_group("Sobrevivência")

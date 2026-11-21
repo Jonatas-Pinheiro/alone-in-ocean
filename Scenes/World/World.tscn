@@ -12,6 +12,7 @@
 [ext_resource type="Script" path="res://Scripts/Survival/survival_manager.gd" id="11_survival"]
 [ext_resource type="Script" path="res://Scripts/Survival/survival_hud.gd" id="12_survival_hud"]
 [ext_resource type="Script" path="res://Scripts/World/day_night_cycle.gd" id="13_day_night_cycle"]
+[ext_resource type="Material" uid="uid://vupq4xdw4cs4" path="res://water_material.tres" id="14_water"]
 
 [sub_resource type="PanoramaSkyMaterial" id="PanoramaSkyMaterial_kfx5d"]
 panorama = ExtResource("5_hveh7")
@@ -31,6 +32,8 @@ uv1_triplanar = true
 [sub_resource type="PlaneMesh" id="PlaneMesh_f5ye2"]
 material = SubResource("StandardMaterial3D_yns2c")
 size = Vector2(200, 200)
+subdivide_width = 31
+subdivide_depth = 31
 
 [node name="World" type="Node3D" unique_id=1755778135]
 
@@ -52,11 +55,13 @@ environment = SubResource("Environment_f5ye2")
 
 [node name="Agua" type="MeshInstance3D" parent="." unique_id=606342053]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.007284403, 0.014441967, 0.0064120293)
-visible = false
+visible = true
 mesh = SubResource("PlaneMesh_f5ye2")
+surface_material_override/0 = ExtResource("14_water")
 
 [node name="Demo" parent="." unique_id=1513367113 instance=ExtResource("5_87yka")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.15, 0)
+visible = false
 
 [node name="CanvasLayer" type="CanvasLayer" parent="." unique_id=1790566965]
 script = ExtResource("7_87yka")
