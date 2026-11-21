@@ -25,6 +25,7 @@ Para testar na mesma rede, os clientes devem usar o IP local do anfitrião. Para
 - Recursos à deriva que o anfitrião cria e replica; ao mirar e pressionar **E**, o jogador os coleta para um inventário compartilhado na sessão.
 - HUD de fome, sede, saúde e inventário. Fome e sede diminuem com o tempo; comida e água recuperam as necessidades, e valores zerados causam dano.
 - Slots de entrada atribuídos pelo anfitrião e distribuídos sobre a jangada inicial.
+- Ciclo de dia/noite de 24 minutos por sessão: 12 minutos de dia e 12 de noite, usando as skyboxes Kenney e sincronizado pelo anfitrião.
 
 ## Limites atuais
 

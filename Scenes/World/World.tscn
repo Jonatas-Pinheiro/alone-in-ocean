@@ -11,6 +11,7 @@
 [ext_resource type="Script" path="res://Scripts/Multiplayer/building_network.gd" id="10_building_network"]
 [ext_resource type="Script" path="res://Scripts/Survival/survival_manager.gd" id="11_survival"]
 [ext_resource type="Script" path="res://Scripts/Survival/survival_hud.gd" id="12_survival_hud"]
+[ext_resource type="Script" path="res://Scripts/World/day_night_cycle.gd" id="13_day_night_cycle"]
 
 [sub_resource type="PanoramaSkyMaterial" id="PanoramaSkyMaterial_kfx5d"]
 panorama = ExtResource("5_hveh7")
@@ -76,3 +77,6 @@ raft_root = NodePath("../Floor")
 
 [node name="SurvivalHUD" type="CanvasLayer" parent="."]
 script = ExtResource("12_survival_hud")
+
+[node name="DayNightCycle" type="Node" parent="."]
+script = ExtResource("13_day_night_cycle")
