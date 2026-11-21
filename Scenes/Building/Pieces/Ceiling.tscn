@@ -1,0 +1,25 @@
+[gd_scene format=3 uid="uid://ciitmg27m3tlt"]
+
+[ext_resource type="Texture2D" uid="uid://sa18fg8f8gbr" path="res://Assets/Materials/wood.jpg" id="1_nxy48"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_kfx5d"]
+diffuse_mode = 3
+specular_mode = 1
+albedo_texture = ExtResource("1_nxy48")
+uv1_scale = Vector3(0.2, 0.2, 0.2)
+uv1_triplanar = true
+
+[sub_resource type="BoxMesh" id="BoxMesh_f5ye2"]
+material = SubResource("StandardMaterial3D_kfx5d")
+size = Vector3(3, 0.3, 3)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_g7jgj"]
+size = Vector3(3, 0.3, 3)
+
+[node name="Ceiling" type="StaticBody3D" unique_id=1061631187]
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="." unique_id=643980916]
+mesh = SubResource("BoxMesh_f5ye2")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=386212866]
+shape = SubResource("BoxShape3D_g7jgj")

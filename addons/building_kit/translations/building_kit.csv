@@ -1,0 +1,90 @@
+keys,en,fr
+%d can't be built: %s,%d can't be built: %s,%d impossible(s) : %s
+(+%d resting on it),(+%d resting on it),(+%d posé(s) dessus)
+A: build · B: cancel,A: build · B: cancel,A : construire · B : annuler
+A: demolish,A: demolish,A : démolir
+A: pick up,A: pick up,A : prendre
+A: put down · RB: rotate · B: put back,A: put down · RB: rotate · B: put back,A : poser · RB : tourner · B : remettre
+A: select,A: select,A : sélectionner
+All,All,Tout
+Built: %d / %d,Built: %d / %d,Construits : %d / %d
+Cancel,Cancel,Annuler
+Choose a piece below (%s),Choose a piece below (%s),Choisissez une pièce en bas (%s)
+Click a piece to demolish it,Click a piece to demolish it,Cliquez sur une pièce pour la démolir
+Click a piece to pick it up,Click a piece to pick it up,Cliquez sur une pièce pour la prendre
+Click a piece to select it,Click a piece to select it,Cliquez sur une pièce pour la sélectionner
+Click: build · Right click: cancel,Click: build · Right click: cancel,Clic : construire · Clic droit : annuler
+Click: put down · R: rotate · Right click: put back,Click: put down · R: rotate · Right click: put back,Clic : poser · R : tourner · Clic droit : remettre
+Cost:,Cost:,Coût :
+Demolish refund: %d%%,Demolish refund: %d%%,Remboursé à la démolition : %d %%
+F: flip,F: flip,F : retourner
+Flip,Flip,Retourner
+Free,Free,Gratuit
+Hold and drag to build several,Hold and drag to build several,Maintenez et glissez pour en construire plusieurs
+Missing:,Missing:,Manque :
+Moving: %s,Moving: %s,Déplacement : %s
+No room for: %s,No room for: %s,Pas de place pour : %s
+Pick something to build,Pick something to build,Choisissez quoi construire
+Point at a piece,Point at a piece,Visez une pièce
+R / Shift+R: rotate (Ctrl: fine),R / Shift+R: rotate (Ctrl: fine),R / Maj+R : tourner (Ctrl : fin)
+R3: tilt,R3: tilt,R3 : incliner
+RB / LB: rotate,RB / LB: rotate,RB / LB : tourner
+Refund: %s,Refund: %s,Remboursé : %s
+Refund:,Refund:,Remboursé :
+Rotate,Rotate,Tourner
+T: tilt,T: tilt,T : incliner
+Undo,Undo,Annuler l'action
+Y: flip,Y: flip,Y : retourner
+Build,Build,Construire
+Move,Move,Déplacer
+Demolish,Demolish,Démolir
+Select,Select,Sélectionner
+Something is in the way.,Something is in the way.,Quelque chose gêne.
+Outside the building area.,Outside the building area.,Hors de la zone de construction.
+You cannot build here.,You cannot build here.,Impossible de construire ici.
+The ground is too steep.,The ground is too steep.,Le terrain est trop en pente.
+This goes on another kind of surface.,This goes on another kind of surface.,Cela se pose sur un autre type de surface.
+This cannot go on top of that.,This cannot go on top of that.,Cela ne peut pas aller là-dessus.
+Needs a foundation.,Needs a foundation.,Il faut une fondation.
+You have built as many of these as you can.,You have built as many of these as you can.,Vous en avez construit le maximum.
+Needs a neighbour of the right kind.,Needs a neighbour of the right kind.,Il lui faut un voisin du bon type.
+Not enough resources.,Not enough resources.,Pas assez de ressources.
+No room in your bag for the refund.,No room in your bag for the refund.,Pas de place dans le sac pour le remboursement.
+Aim at a matching snap point.,Aim at a matching snap point.,Visez un point d'accroche compatible.
+Aim at the ground.,Aim at the ground.,Visez le sol.
+Other pieces rest on it.,Other pieces rest on it.,D'autres pièces reposent dessus.
+There is nothing there.,There is nothing there.,Il n'y a rien ici.
+Nothing to undo.,Nothing to undo.,Rien à annuler.
+This piece cannot turn.,This piece cannot turn.,Cette pièce ne tourne pas.
+Pick something to build first.,Pick something to build first.,Choisissez d'abord quoi construire.
+This save could not be read.,This save could not be read.,Cette sauvegarde est illisible.
+This save comes from a newer version.,This save comes from a newer version.,Cette sauvegarde vient d'une version plus récente.
+That is too many pieces at once.,That is too many pieces at once.,Trop de pièces d'un coup.
+%d pieces selected,%d pieces selected,%d pièces sélectionnées
+A: build · RB: turn · B: cancel,A: build · RB: turn · B: cancel,A : construire · RB : tourner · B : annuler
+A: repair,A: repair,A : réparer
+A: upgrade,A: upgrade,A : améliorer
+Blueprint %d,Blueprint %d,Plan %d
+Blueprint saved: %s,Blueprint saved: %s,Plan enregistré : %s
+Blueprints,Blueprints,Plans
+Built: %s,Built: %s,Construit : %s
+Click a damaged piece to repair it,Click a damaged piece to repair it,Cliquez sur une pièce abîmée pour la réparer
+Click a piece to upgrade it,Click a piece to upgrade it,Cliquez sur une pièce pour l'améliorer
+Click: build it all · R: quarter turn · Right click: cancel,Click: build it all · R: quarter turn · Right click: cancel,Clic : tout construire · R : quart de tour · Clic droit : annuler
+Click: select · Shift+click: add · Drag: box,Click: select · Shift+click: add · Drag: box,Clic : sélectionner · Maj+clic : ajouter · Glisser : zone
+Floor %d,Floor %d,Étage %d
+Floor down,Floor down,Étage en dessous
+Floor up,Floor up,Étage au-dessus
+Health: %d / %d,Health: %d / %d,Solidité : %d / %d
+Nothing to repair.,Nothing to repair.,Rien à réparer.
+Repair,Repair,Réparer
+Repair:,Repair:,Réparation :
+Repaired for %s,Repaired for %s,Réparé pour %s
+Save as blueprint,Save as blueprint,Enregistrer comme plan
+Select pieces first.,Select pieces first.,Sélectionnez d'abord des pièces.
+Stability: %d%%,Stability: %d%%,Stabilité : %d %%
+This piece cannot be damaged.,This piece cannot be damaged.,Cette pièce ne peut pas être abîmée.
+This piece cannot be upgraded.,This piece cannot be upgraded.,Cette pièce ne peut pas être améliorée.
+Too far from a support: it would fall.,Too far from a support: it would fall.,Trop loin d'un appui : elle tomberait.
+Upgrade,Upgrade,Améliorer
+Upgraded to %s,Upgraded to %s,Amélioré en %s

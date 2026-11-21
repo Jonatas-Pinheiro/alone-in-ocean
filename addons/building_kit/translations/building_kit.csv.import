@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://ipoeb4jiatcu"
+
+[deps]
+
+files=["res://addons/building_kit/translations/building_kit.en.translation", "res://addons/building_kit/translations/building_kit.fr.translation"]
+
+source_file="res://addons/building_kit/translations/building_kit.csv"
+dest_files=["res://addons/building_kit/translations/building_kit.en.translation", "res://addons/building_kit/translations/building_kit.fr.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

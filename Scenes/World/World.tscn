@@ -1,0 +1,87 @@
+[gd_scene format=3 uid="uid://bkddaxb4t2s34"]
+
+[ext_resource type="Script" uid="uid://bcywpxx26ojr8" path="res://Scripts/Player/player.gd" id="1_lp0bp"]
+[ext_resource type="Texture2D" uid="uid://cxk30r2hno2jx" path="res://kenney_pattern-pack/Vector/pattern_83.svg" id="2_27jhl"]
+[ext_resource type="PackedScene" uid="uid://btuc8j4krgst" path="res://Scenes/Building/Pieces/Floor.tscn" id="2_ouhkt"]
+[ext_resource type="Script" uid="uid://d2jhj181tsnqb" path="res://Scripts/Multiplayer/network_manager.gd" id="4_5jr8x"]
+[ext_resource type="PackedScene" uid="uid://61i4l7kx381y" path="res://demo.tscn" id="5_87yka"]
+[ext_resource type="Texture2D" uid="uid://442dv505vhfn" path="res://kenney_skyboxes/Skyboxes/skybox-day.png" id="5_hveh7"]
+[ext_resource type="Script" uid="uid://b4d8xa2s8hpka" path="res://Scripts/World/fps_counter.gd" id="7_87yka"]
+[ext_resource type="PackedScene" uid="uid://c5ycl7x7quuvj" path="res://Assets/Models/Character/Male/free_tung_tung_tung_tung_sahur.glb" id="8_kjd5s"]
+[ext_resource type="Script" uid="uid://5isyexsdmkjp" path="res://Scenes/Building/BuildingKitBootstrap.gd" id="9_p7pgw"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_f5ye2"]
+
+[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_l3ax4"]
+properties/0/path = NodePath(".:position")
+properties/0/spawn = true
+properties/0/replication_mode = 1
+properties/1/path = NodePath(".:rotation")
+properties/1/spawn = true
+properties/1/replication_mode = 1
+
+[sub_resource type="PanoramaSkyMaterial" id="PanoramaSkyMaterial_kfx5d"]
+panorama = ExtResource("5_hveh7")
+
+[sub_resource type="Sky" id="Sky_g7jgj"]
+sky_material = SubResource("PanoramaSkyMaterial_kfx5d")
+
+[sub_resource type="Environment" id="Environment_f5ye2"]
+background_mode = 2
+sky = SubResource("Sky_g7jgj")
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_yns2c"]
+albedo_color = Color(0.42367646, 0.80423385, 1, 1)
+albedo_texture = ExtResource("2_27jhl")
+uv1_triplanar = true
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_f5ye2"]
+material = SubResource("StandardMaterial3D_yns2c")
+size = Vector2(200, 200)
+
+[node name="World" type="Node3D" unique_id=1755778135]
+
+[node name="Player" type="CharacterBody3D" parent="." unique_id=1629692482]
+script = ExtResource("1_lp0bp")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Player" unique_id=236895206]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+shape = SubResource("CapsuleShape3D_f5ye2")
+
+[node name="Camera3D" type="Camera3D" parent="Player" unique_id=1001716792]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.6, 0)
+
+[node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="Player" unique_id=1860446760]
+replication_config = SubResource("SceneReplicationConfig_l3ax4")
+
+[node name="Floor" parent="." unique_id=439801327 instance=ExtResource("2_ouhkt")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.15, 0)
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=1472133621]
+transform = Transform3D(-0.87374955, 0.27785662, -0.39919606, -0.06142996, 0.7511393, 0.6572795, 0.48248124, 0.5988203, -0.6392389, 0, 0, 0)
+light_energy = 3.027
+
+[node name="NetworkManager" type="Node" parent="." unique_id=982998791]
+script = ExtResource("4_5jr8x")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1270375781]
+environment = SubResource("Environment_f5ye2")
+
+[node name="Agua" type="MeshInstance3D" parent="." unique_id=606342053]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.007284403, 0.014441967, 0.0064120293)
+visible = false
+mesh = SubResource("PlaneMesh_f5ye2")
+
+[node name="Demo" parent="." unique_id=1513367113 instance=ExtResource("5_87yka")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.15, 0)
+
+[node name="CanvasLayer" type="CanvasLayer" parent="." unique_id=1790566965]
+script = ExtResource("7_87yka")
+
+[node name="TungTungSahur" parent="." unique_id=309947954 instance=ExtResource("8_kjd5s")]
+transform = Transform3D(15.130408, 0, 0, 0, 8.07906, 0, 0, 0, 1, -0.9554572, 0, -43.848854)
+
+[node name="BuildingKitSetup" type="Node3D" parent="." unique_id=86097153 node_paths=PackedStringArray("player_camera", "raft_root")]
+script = ExtResource("9_p7pgw")
+player_camera = NodePath("../Player/Camera3D")
+raft_root = NodePath("../Floor")
