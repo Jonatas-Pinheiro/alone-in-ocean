@@ -86,8 +86,6 @@ const SYNC_PATHS: Array[NodePath] = [
 @export var breathing_amount := 0.0025
 
 var owner_peer_id := 0
-
-@export_group("Sobrevivência")
 var hunger := 100.0
 var thirst := 100.0
 var health := 100.0
@@ -96,6 +94,8 @@ var plastic_count := 0
 var scrap_count := 0
 var food_count := 0
 var water_count := 0
+var display_name := "Sobrevivente"
+var _name_tag: Label3D
 
 ## Replicado pelo servidor (o cliente não simula física, então não sabe se está no chão).
 var grounded := true
@@ -176,6 +176,10 @@ func _enter_tree() -> void:
 func _ready() -> void:
 	add_to_group("players")
 	_mp = multiplayer
+	_create_name_tag()
+	_is_local = owner_peer_id == _mp.get_unique_id()
+	_is_server = _mp.is_server()
+	_is_auth = is_multiplayer_authority()
 	_rate_limit = Engine.physics_ticks_per_second * 2
 
 	_yaw = rotation.y
@@ -189,7 +193,23 @@ func _ready() -> void:
 	_prev_pos = global_position
 	_was_grounded = grounded
 
-	_refresh_runtime_state()
+	# Economia de CPU: cada instância só roda o que realmente precisa.
+	#  - _process / entrada: apenas o jogador local
+	#  - _physics_process: servidor (simula) ou dono local (envia entrada)
+	set_process(_is_local)
+	set_process_unhandled_input(_is_local)
+	set_physics_process(_is_local or _is_auth)
+
+	if _is_local:
+		_ensure_input_actions()
+		camera.make_current()
+
+		if body_model != null:
+			body_model.visible = false
+
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	else:
+		camera.current = false
 
 	if OS.is_debug_build():
 		print(
@@ -201,35 +221,24 @@ func _ready() -> void:
 		)
 
 
-## Atualiza as flags quando uma cena single-player é adotada como peer do servidor.
-func configure_owner_peer_id(peer_id: int) -> void:
-	owner_peer_id = peer_id
-	if is_node_ready():
-		_refresh_runtime_state()
+func set_display_name(value: String) -> void:
+	display_name = value.strip_edges().substr(0, 20)
+	if _name_tag != null:
+		_name_tag.text = display_name
 
 
-func _refresh_runtime_state() -> void:
-	var was_local := _is_local
-	_mp = multiplayer
-	_is_local = owner_peer_id == _mp.get_unique_id()
-	_is_server = _mp.is_server()
-	_is_auth = is_multiplayer_authority()
-
-	# Somente o jogador local coleta input; o servidor também simula física.
-	set_process(_is_local)
-	set_process_unhandled_input(_is_local)
-	set_physics_process(_is_local or _is_auth)
-
-	if _is_local:
-		_ensure_input_actions()
-		camera.make_current()
-		if body_model != null:
-			body_model.visible = false
-		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-	else:
-		camera.current = false
-		if was_local:
-			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+func _create_name_tag() -> void:
+	_name_tag = Label3D.new()
+	_name_tag.name = "NameTag"
+	_name_tag.position = Vector3(0.0, 2.35, 0.0)
+	_name_tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	_name_tag.no_depth_test = true
+	_name_tag.font_size = 30
+	_name_tag.pixel_size = 0.01
+	_name_tag.outline_size = 8
+	_name_tag.modulate = Color(0.92, 0.98, 1.0)
+	_name_tag.text = display_name
+	add_child(_name_tag)
 
 
 func _exit_tree() -> void:
@@ -317,11 +326,9 @@ func _try_collect_pickup() -> void:
 	query.collision_mask = 2
 	query.collide_with_areas = true
 	query.collide_with_bodies = false
-
 	var result := get_world_3d().direct_space_state.intersect_ray(query)
 	if result.is_empty():
 		return
-
 	var pickup := result.get("collider") as SalvagePickup
 	if pickup != null:
 		_request_survival_action("collect", pickup.pickup_id)
@@ -334,7 +341,6 @@ func _request_survival_action(action: String, pickup_id: int = -1) -> void:
 	var manager := scene.get_node_or_null("SurvivalManager")
 	if manager == null:
 		return
-
 	if multiplayer.is_server():
 		manager.call("handle_local_action", self, action, pickup_id)
 	else:

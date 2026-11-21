@@ -68,6 +68,14 @@ func _build_interface() -> void:
 	_hint_label = Label.new()
 	_hint_label.add_theme_font_size_override("font_size", 12)
 	column.add_child(_hint_label)
+	_set_mouse_passthrough(_root)
+
+
+func _set_mouse_passthrough(node: Node) -> void:
+	if node is Control:
+		(node as Control).mouse_filter = Control.MOUSE_FILTER_IGNORE
+	for child in node.get_children():
+		_set_mouse_passthrough(child)
 
 
 func _make_bar(parent: VBoxContainer, title: String) -> ProgressBar:

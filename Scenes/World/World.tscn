@@ -1,6 +1,5 @@
 [gd_scene format=3 uid="uid://bkddaxb4t2s34"]
 
-[ext_resource type="Script" uid="uid://bcywpxx26ojr8" path="res://Scripts/Player/player.gd" id="1_lp0bp"]
 [ext_resource type="Texture2D" uid="uid://cxk30r2hno2jx" path="res://kenney_pattern-pack/Vector/pattern_83.svg" id="2_27jhl"]
 [ext_resource type="PackedScene" uid="uid://btuc8j4krgst" path="res://Scenes/Building/Pieces/Floor.tscn" id="2_ouhkt"]
 [ext_resource type="Script" uid="uid://d2jhj181tsnqb" path="res://Scripts/Multiplayer/network_manager.gd" id="4_5jr8x"]
@@ -8,11 +7,10 @@
 [ext_resource type="Texture2D" uid="uid://442dv505vhfn" path="res://kenney_skyboxes/Skyboxes/skybox-day.png" id="5_hveh7"]
 [ext_resource type="Script" uid="uid://b4d8xa2s8hpka" path="res://Scripts/World/fps_counter.gd" id="7_87yka"]
 [ext_resource type="PackedScene" uid="uid://c5ycl7x7quuvj" path="res://Assets/Models/Character/Male/free_tung_tung_tung_tung_sahur.glb" id="8_kjd5s"]
-[ext_resource type="Script" uid="uid://1aes5q4glsj2" path="res://Scenes/Building/BuildingKitBootstrap.gd" id="9_p7pgw"]
-[ext_resource type="Script" path="res://Scripts/Survival/survival_manager.gd" id="10_survival"]
-[ext_resource type="Script" path="res://Scripts/Survival/survival_hud.gd" id="11_survival_hud"]
-
-[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_f5ye2"]
+[ext_resource type="Script" path="res://Scenes/Building/BuildingKitBootstrap.gd" id="9_p7pgw"]
+[ext_resource type="Script" path="res://Scripts/Multiplayer/building_network.gd" id="10_building_network"]
+[ext_resource type="Script" path="res://Scripts/Survival/survival_manager.gd" id="11_survival"]
+[ext_resource type="Script" path="res://Scripts/Survival/survival_hud.gd" id="12_survival_hud"]
 
 [sub_resource type="PanoramaSkyMaterial" id="PanoramaSkyMaterial_kfx5d"]
 panorama = ExtResource("5_hveh7")
@@ -35,16 +33,6 @@ size = Vector2(200, 200)
 
 [node name="World" type="Node3D" unique_id=1755778135]
 
-[node name="Player" type="CharacterBody3D" parent="." unique_id=1629692482]
-script = ExtResource("1_lp0bp")
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="Player" unique_id=236895206]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
-shape = SubResource("CapsuleShape3D_f5ye2")
-
-[node name="Camera3D" type="Camera3D" parent="Player" unique_id=1001716792]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.6, 0)
-
 [node name="Floor" parent="." unique_id=439801327 instance=ExtResource("2_ouhkt")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.15, 0)
 
@@ -54,6 +42,9 @@ light_energy = 3.027
 
 [node name="NetworkManager" type="Node" parent="." unique_id=982998791]
 script = ExtResource("4_5jr8x")
+
+[node name="BuildingNetwork" type="Node" parent="." unique_id=1487023610]
+script = ExtResource("10_building_network")
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1270375781]
 environment = SubResource("Environment_f5ye2")
@@ -72,18 +63,16 @@ script = ExtResource("7_87yka")
 [node name="TungTungSahur" parent="." unique_id=309947954 instance=ExtResource("8_kjd5s")]
 transform = Transform3D(15.130408, 0, 0, 0, 8.07906, 0, 0, 0, 1, -0.9554572, 0, -43.848854)
 
-[node name="BuildingKitSetup" type="Node3D" parent="." unique_id=86097153 node_paths=PackedStringArray("player_camera", "raft_root")]
+[node name="BuildingKitSetup" type="Node3D" parent="." unique_id=86097153]
 script = ExtResource("9_p7pgw")
-player_camera = NodePath("../Player/Camera3D")
-raft_root = NodePath("../Floor")
 
 [node name="PickupSpawner" type="MultiplayerSpawner" parent="."]
 spawn_path = NodePath("..")
 spawnable_scenes = PackedStringArray("res://Scenes/Survival/SalvagePickup.tscn")
 
 [node name="SurvivalManager" type="Node3D" parent="." node_paths=PackedStringArray("raft_root")]
-script = ExtResource("10_survival")
+script = ExtResource("11_survival")
 raft_root = NodePath("../Floor")
 
 [node name="SurvivalHUD" type="CanvasLayer" parent="."]
-script = ExtResource("11_survival_hud")
+script = ExtResource("12_survival_hud")

@@ -28,16 +28,30 @@ var _rng := RandomNumberGenerator.new()
 var _spawn_elapsed := 0.0
 var _needs_elapsed := 0.0
 var _next_pickup_id := 1
+var _network_manager: Node
 
 
 func _ready() -> void:
 	_rng.randomize()
 	pickup_spawner.spawn_function = Callable(self, "_spawn_pickup")
-	call_deferred("_spawn_initial_pickups")
+	_network_manager = get_parent().get_node_or_null("NetworkManager")
+	if _network_manager != null:
+		_network_manager.session_started.connect(_on_session_started)
+		_network_manager.session_ended.connect(_on_session_ended)
+
+
+func _on_session_started() -> void:
+	if multiplayer.is_server():
+		call_deferred("_spawn_initial_pickups")
+
+
+func _on_session_ended() -> void:
+	for node in get_tree().get_nodes_in_group("salvage_pickups"):
+		node.queue_free()
 
 
 func _process(delta: float) -> void:
-	if not multiplayer.is_server():
+	if not multiplayer.is_server() or _network_manager == null or not _network_manager.is_session_active():
 		return
 
 	_spawn_elapsed += delta
@@ -52,14 +66,14 @@ func _process(delta: float) -> void:
 
 
 func _spawn_initial_pickups() -> void:
-	if not multiplayer.is_server():
+	if not multiplayer.is_server() or _network_manager == null or not _network_manager.is_session_active():
 		return
 	for _index in range(initial_pickups):
 		_spawn_one_pickup()
 
 
 func _spawn_one_pickup() -> void:
-	if not multiplayer.is_server():
+	if not multiplayer.is_server() or _network_manager == null or not _network_manager.is_session_active():
 		return
 	if get_tree().get_nodes_in_group("salvage_pickups").size() >= max_pickups:
 		return
