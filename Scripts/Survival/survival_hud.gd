@@ -5,7 +5,16 @@ const ICON_HEALTH := preload("res://Assets/UI/status_health.svg")
 const ICON_HUNGER := preload("res://Assets/UI/status_hunger.svg")
 const ICON_THIRST := preload("res://Assets/UI/status_thirst.svg")
 const ICON_STAMINA := preload("res://Assets/UI/status_stamina.svg")
+const PICKUP_SOUND := preload("res://Assets/Audio/pickup_chime.wav")
 const INVENTORY_NAMES: Array[String] = ["Madeira", "Plástico", "Sucata", "Comida", "Água"]
+
+
+class CenterAimDot extends Control:
+	func _draw() -> void:
+		var center := size * 0.5
+		draw_circle(center, 4.0, Color(0.02, 0.04, 0.06, 0.72))
+		draw_circle(center, 2.2, Color(1.0, 1.0, 1.0, 0.98))
+
 
 var _root: Control
 var _player: SurvivalPlayer
@@ -27,6 +36,11 @@ var _hotbar_buttons: Array[Button] = []
 var _last_counts: Array[int] = []
 var _selected_hotbar_slot := 0
 var _last_selected_hotbar_slot := -1
+var _aim_dot: Control
+var _pickup_audio: AudioStreamPlayer
+var _pickup_feedback: Label
+var _pickup_feedback_time := 0.0
+var _slot_feedback_tweens: Dictionary = {}
 
 
 func _ready() -> void:
@@ -37,7 +51,7 @@ func _ready() -> void:
 	_layout_hotbar()
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	var local_id := multiplayer.get_unique_id()
 	if not is_instance_valid(_player) or _player.owner_peer_id != local_id:
 		_player = _find_local_player(local_id)
@@ -60,9 +74,14 @@ func _process(_delta: float) -> void:
 		_player.water_count,
 	]
 	_update_inventory_display()
-	_eat_button.visible = _mobile_controls.touch_enabled and _player.food_count > 0 and _player.hunger < 98.0
-	_drink_button.visible = _mobile_controls.touch_enabled and _player.water_count > 0 and _player.thirst < 98.0
+	var show_eat_button: bool = _mobile_controls.touch_enabled and _player.food_count > 0 and _player.hunger < 98.0
+	var show_drink_button: bool = _mobile_controls.touch_enabled and _player.water_count > 0 and _player.thirst < 98.0
+	if _eat_button.visible != show_eat_button or _drink_button.visible != show_drink_button:
+		_eat_button.visible = show_eat_button
+		_drink_button.visible = show_drink_button
+		_layout_all()
 	_update_build_system()
+	_update_pickup_feedback(delta)
 
 
 func _find_local_player(peer_id: int) -> SurvivalPlayer:
@@ -159,7 +178,6 @@ func _build_interface() -> void:
 	_build_menu.add_theme_constant_override("margin_bottom", 7)
 	_build_menu.visible = false
 	_root.add_child(_build_menu)
-	_root.resized.connect(_layout_build_menu)
 
 	var menu_column := VBoxContainer.new()
 	menu_column.add_theme_constant_override("separation", 5)
@@ -237,7 +255,28 @@ func _build_interface() -> void:
 		slot.pressed.connect(_activate_hotbar_slot.bind(index))
 		hotbar_row.add_child(slot)
 		_hotbar_buttons.append(slot)
-	_layout_build_menu()
+	_pickup_feedback = Label.new()
+	_pickup_feedback.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_pickup_feedback.add_theme_font_size_override("font_size", 18)
+	_pickup_feedback.add_theme_color_override("font_color", Color(1.0, 0.91, 0.56, 1.0))
+	_pickup_feedback.add_theme_color_override("font_outline_color", Color(0.015, 0.035, 0.05, 0.95))
+	_pickup_feedback.add_theme_constant_override("outline_size", 4)
+	_pickup_feedback.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_pickup_feedback.visible = false
+	_root.add_child(_pickup_feedback)
+
+	_aim_dot = CenterAimDot.new()
+	_aim_dot.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_aim_dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_aim_dot.z_index = 20
+	_root.add_child(_aim_dot)
+
+	_pickup_audio = AudioStreamPlayer.new()
+	_pickup_audio.stream = PICKUP_SOUND
+	_pickup_audio.volume_db = -8.0
+	add_child(_pickup_audio)
+	_root.resized.connect(_layout_all)
+	_layout_all()
 
 
 func _create_mobile_controls() -> void:
@@ -316,10 +355,9 @@ func _update_build_system() -> void:
 
 	var native_hud := scene.get_node_or_null("BuildingHUDLayer/PKBuildHUD") as PKBuildHUD
 	if native_hud != null:
+		native_hud.mode_bar.visible = false
 		native_hud.catalog_panel.visible = false
-		native_hud.catalog_panel.button_size = Vector2(64.0, 68.0)
 		native_hud.info_panel.visible = false
-		native_hud.mode_bar.position = Vector2(12.0, 132.0)
 
 
 func _rebuild_build_menu() -> void:
@@ -382,6 +420,11 @@ func _update_inventory_display() -> void:
 	]
 	if counts == _last_counts and _selected_hotbar_slot == _last_selected_hotbar_slot:
 		return
+	if not _last_counts.is_empty():
+		for index in range(counts.size()):
+			var gained := counts[index] - _last_counts[index]
+			if gained > 0:
+				_show_pickup_feedback(index, gained)
 	_last_counts = counts.duplicate()
 	_last_selected_hotbar_slot = _selected_hotbar_slot
 	_inventory_details.text = "Madeira: %d\nPlástico: %d\nSucata: %d\nComida: %d\nÁgua: %d" % counts
@@ -393,33 +436,141 @@ func _update_inventory_display() -> void:
 		slot.add_theme_stylebox_override("normal", _button_style(color))
 
 
+func _show_pickup_feedback(index: int, amount: int) -> void:
+	if index < 0 or index >= _hotbar_buttons.size() or amount <= 0:
+		return
+	_pickup_feedback.text = "+%d  %s" % [amount, INVENTORY_NAMES[index]]
+	_pickup_feedback.visible = true
+	_pickup_feedback.modulate = Color.WHITE
+	_pickup_feedback_time = 1.15
+	if _pickup_audio.playing:
+		_pickup_audio.stop()
+	_pickup_audio.play()
+
+	var slot := _hotbar_buttons[index]
+	var previous_tween := _slot_feedback_tweens.get(index) as Tween
+	if previous_tween != null and previous_tween.is_running():
+		previous_tween.kill()
+	slot.pivot_offset = slot.size * 0.5
+	slot.scale = Vector2.ONE
+	slot.modulate = Color.WHITE
+	var tween := create_tween()
+	_slot_feedback_tweens[index] = tween
+	tween.tween_property(slot, "scale", Vector2(1.09, 1.09), 0.10).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tween.parallel().tween_property(slot, "modulate", Color(1.0, 1.0, 0.68, 1.0), 0.10)
+	tween.tween_property(slot, "scale", Vector2.ONE, 0.24).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tween.parallel().tween_property(slot, "modulate", Color.WHITE, 0.24)
+
+
+func _update_pickup_feedback(delta: float) -> void:
+	if _pickup_feedback_time <= 0.0:
+		return
+	_pickup_feedback_time = maxf(0.0, _pickup_feedback_time - delta)
+	var progress := 1.0 - _pickup_feedback_time / 1.15
+	_pickup_feedback.offset_top = 72.0 - progress * 10.0
+	_pickup_feedback.offset_bottom = 108.0 - progress * 10.0
+	_pickup_feedback.modulate.a = clampf(_pickup_feedback_time / 0.3, 0.0, 1.0)
+	if _pickup_feedback_time <= 0.0:
+		_pickup_feedback.visible = false
+
+
+func _layout_all() -> void:
+	if _root == null or _status_panel == null:
+		return
+	_layout_status_panel()
+	_layout_action_buttons()
+	_layout_build_menu()
+	_layout_inventory_panel()
+	_layout_hotbar()
+	_layout_pickup_feedback()
+
+
+func _layout_status_panel() -> void:
+	_status_panel.position = Vector2(12.0, 112.0 if _root.size.x < 680.0 else 12.0)
+
+
+func _compact_action_top() -> float:
+	var status_height := maxf(_status_panel.size.y, _status_panel.get_combined_minimum_size().y)
+	return _status_panel.position.y + status_height + 8.0
+
+
+func _layout_action_buttons() -> void:
+	if _root.size.x < 680.0:
+		var button_width := minf(96.0, maxf(72.0, (_root.size.x - 36.0) * 0.5))
+		var top := _compact_action_top()
+		_build_button.custom_minimum_size.x = button_width
+		_build_button.set_anchors_preset(Control.PRESET_TOP_LEFT)
+		_build_button.offset_left = 12.0
+		_build_button.offset_right = 12.0 + button_width
+		_build_button.offset_top = top
+		_build_button.offset_bottom = top + 36.0
+		_inventory_button.custom_minimum_size.x = button_width
+		_inventory_button.set_anchors_preset(Control.PRESET_TOP_LEFT)
+		_inventory_button.offset_left = 20.0 + button_width
+		_inventory_button.offset_right = 20.0 + button_width * 2.0
+		_inventory_button.offset_top = top
+		_inventory_button.offset_bottom = top + 36.0
+	else:
+		_build_button.custom_minimum_size.x = 96.0
+		_build_button.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+		_build_button.offset_left = -108.0
+		_build_button.offset_right = -12.0
+		_build_button.offset_top = 112.0
+		_build_button.offset_bottom = 148.0
+		_inventory_button.custom_minimum_size.x = 96.0
+		_inventory_button.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+		_inventory_button.offset_left = -212.0
+		_inventory_button.offset_right = -112.0
+		_inventory_button.offset_top = 112.0
+		_inventory_button.offset_bottom = 148.0
+
+
 func _layout_build_menu() -> void:
 	if _build_menu == null:
 		return
-	if _root.size.x < 440.0:
-		_build_menu.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-		_build_menu.offset_left = -112.0
-		_build_menu.offset_right = 112.0
-		_build_menu.offset_top = -164.0
-		_build_menu.offset_bottom = -12.0
+	if _root.size.x < 680.0:
+		var menu_top := _compact_action_top() + 44.0
+		var menu_width := minf(224.0, maxf(160.0, _root.size.x - 24.0))
+		_build_menu.set_anchors_preset(Control.PRESET_TOP_LEFT)
+		_build_menu.offset_left = 12.0
+		_build_menu.offset_right = 12.0 + menu_width
+		_build_menu.offset_top = menu_top
+		_build_menu.offset_bottom = menu_top + 152.0
 	else:
 		_build_menu.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 		_build_menu.offset_left = -204.0
 		_build_menu.offset_right = -12.0
-		_build_menu.offset_top = 56.0
-		_build_menu.offset_bottom = 192.0
-	_layout_inventory_panel()
-	_layout_hotbar()
+		_build_menu.offset_top = 156.0
+		_build_menu.offset_bottom = 292.0
 
 
 func _layout_inventory_panel() -> void:
 	if _inventory_panel == null:
 		return
-	_inventory_panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	_inventory_panel.offset_left = -212.0
-	_inventory_panel.offset_right = -12.0
-	_inventory_panel.offset_top = 56.0
-	_inventory_panel.offset_bottom = 190.0
+	if _root.size.x < 680.0:
+		var panel_top := _compact_action_top() + 44.0
+		var panel_width := minf(224.0, maxf(160.0, _root.size.x - 24.0))
+		_inventory_panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
+		_inventory_panel.offset_left = 12.0
+		_inventory_panel.offset_right = 12.0 + panel_width
+		_inventory_panel.offset_top = panel_top
+		_inventory_panel.offset_bottom = panel_top + 144.0
+	else:
+		_inventory_panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+		_inventory_panel.offset_left = -212.0
+		_inventory_panel.offset_right = -12.0
+		_inventory_panel.offset_top = 156.0
+		_inventory_panel.offset_bottom = 290.0
+
+
+func _layout_pickup_feedback() -> void:
+	if _pickup_feedback == null:
+		return
+	_pickup_feedback.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	_pickup_feedback.offset_left = -120.0
+	_pickup_feedback.offset_right = 120.0
+	_pickup_feedback.offset_top = 72.0
+	_pickup_feedback.offset_bottom = 108.0
 
 
 func _layout_hotbar() -> void:
