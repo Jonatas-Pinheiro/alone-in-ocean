@@ -1,4 +1,5 @@
 extends CharacterBody3D
+class_name SurvivalPlayer
 
 ## Jogador multiplayer com física autoritativa no servidor.
 ## Versão otimizada para dispositivos fracos + animações de câmera (só no jogador local).
@@ -22,6 +23,10 @@ const ACTION_RIGHT := &"move_right"
 const ACTION_FORWARD := &"move_forward"
 const ACTION_BACK := &"move_back"
 const ACTION_JUMP := &"jump"
+const ACTION_INTERACT := &"interact"
+const ACTION_EAT := &"consume_food"
+const ACTION_DRINK := &"drink_water"
+const INTERACTION_RAY_LENGTH := 10.0
 
 const DEFAULT_KEYS := {
 	&"move_forward": KEY_W,
@@ -29,6 +34,9 @@ const DEFAULT_KEYS := {
 	&"move_left": KEY_A,
 	&"move_right": KEY_D,
 	&"jump": KEY_SPACE,
+	&"interact": KEY_E,
+	&"consume_food": KEY_F,
+	&"drink_water": KEY_G,
 }
 
 # Só o necessário é replicado, e apenas quando muda (ON_CHANGE).
@@ -38,6 +46,14 @@ const SYNC_PATHS: Array[NodePath] = [
 	^".:rotation:y",
 	^"Camera3D:rotation:x",
 	^".:grounded",
+	^".:hunger",
+	^".:thirst",
+	^".:health",
+	^".:wood_count",
+	^".:plastic_count",
+	^".:scrap_count",
+	^".:food_count",
+	^".:water_count",
 ]
 
 @export_group("Movimento")
@@ -70,6 +86,16 @@ const SYNC_PATHS: Array[NodePath] = [
 @export var breathing_amount := 0.0025
 
 var owner_peer_id := 0
+
+@export_group("Sobrevivência")
+var hunger := 100.0
+var thirst := 100.0
+var health := 100.0
+var wood_count := 0
+var plastic_count := 0
+var scrap_count := 0
+var food_count := 0
+var water_count := 0
 
 ## Replicado pelo servidor (o cliente não simula física, então não sabe se está no chão).
 var grounded := true
@@ -148,6 +174,7 @@ func _enter_tree() -> void:
 
 
 func _ready() -> void:
+	add_to_group("players")
 	_mp = multiplayer
 	_rate_limit = Engine.physics_ticks_per_second * 2
 
@@ -264,11 +291,54 @@ func _unhandled_input(event: InputEvent) -> void:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		return
 
+	if event.is_action_pressed(ACTION_INTERACT):
+		_try_collect_pickup()
+		return
+
+	if event.is_action_pressed(ACTION_EAT):
+		_request_survival_action("eat")
+		return
+
+	if event.is_action_pressed(ACTION_DRINK):
+		_request_survival_action("drink")
+		return
+
 	var click := event as InputEventMouseButton
 
 	if click != null and click.pressed:
 		if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
 			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+
+func _try_collect_pickup() -> void:
+	var ray_from := camera.global_position
+	var ray_to := ray_from - camera.global_transform.basis.z * INTERACTION_RAY_LENGTH
+	var query := PhysicsRayQueryParameters3D.create(ray_from, ray_to)
+	query.collision_mask = 2
+	query.collide_with_areas = true
+	query.collide_with_bodies = false
+
+	var result := get_world_3d().direct_space_state.intersect_ray(query)
+	if result.is_empty():
+		return
+
+	var pickup := result.get("collider") as SalvagePickup
+	if pickup != null:
+		_request_survival_action("collect", pickup.pickup_id)
+
+
+func _request_survival_action(action: String, pickup_id: int = -1) -> void:
+	var scene := get_tree().current_scene
+	if scene == null:
+		return
+	var manager := scene.get_node_or_null("SurvivalManager")
+	if manager == null:
+		return
+
+	if multiplayer.is_server():
+		manager.call("handle_local_action", self, action, pickup_id)
+	else:
+		manager.rpc_id(SERVER_ID, "request_action", action, pickup_id)
 
 
 # ---------------------------------------------------------------------------

@@ -9,6 +9,8 @@
 [ext_resource type="Script" uid="uid://b4d8xa2s8hpka" path="res://Scripts/World/fps_counter.gd" id="7_87yka"]
 [ext_resource type="PackedScene" uid="uid://c5ycl7x7quuvj" path="res://Assets/Models/Character/Male/free_tung_tung_tung_tung_sahur.glb" id="8_kjd5s"]
 [ext_resource type="Script" uid="uid://1aes5q4glsj2" path="res://Scenes/Building/BuildingKitBootstrap.gd" id="9_p7pgw"]
+[ext_resource type="Script" path="res://Scripts/Survival/survival_manager.gd" id="10_survival"]
+[ext_resource type="Script" path="res://Scripts/Survival/survival_hud.gd" id="11_survival_hud"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_f5ye2"]
 
@@ -74,3 +76,14 @@ transform = Transform3D(15.130408, 0, 0, 0, 8.07906, 0, 0, 0, 1, -0.9554572, 0, 
 script = ExtResource("9_p7pgw")
 player_camera = NodePath("../Player/Camera3D")
 raft_root = NodePath("../Floor")
+
+[node name="PickupSpawner" type="MultiplayerSpawner" parent="."]
+spawn_path = NodePath("..")
+spawnable_scenes = PackedStringArray("res://Scenes/Survival/SalvagePickup.tscn")
+
+[node name="SurvivalManager" type="Node3D" parent="." node_paths=PackedStringArray("raft_root")]
+script = ExtResource("10_survival")
+raft_root = NodePath("../Floor")
+
+[node name="SurvivalHUD" type="CanvasLayer" parent="."]
+script = ExtResource("11_survival_hud")
