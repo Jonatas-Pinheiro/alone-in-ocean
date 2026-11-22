@@ -49,7 +49,7 @@ var _build_system_refresh_elapsed := 0.0
 
 func _ready() -> void:
 	layer = 5
-	set_process_unhandled_key_input(true)
+	set_process_unhandled_input(true)
 	_build_interface()
 	_create_mobile_controls()
 	_layout_hotbar()
@@ -153,7 +153,7 @@ func _build_interface() -> void:
 	_build_button.text = "Construir [V]"
 	_build_button.custom_minimum_size = Vector2(96.0, 36.0)
 	_build_button.focus_mode = Control.FOCUS_NONE
-	_build_button.tooltip_text = "Abrir menu de construção (tecla V)"
+	_build_button.tooltip_text = "Abrir menu de construção (V / OPTIONS)"
 	_build_button.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	_build_button.offset_left = -108.0
 	_build_button.offset_right = -12.0
@@ -168,9 +168,10 @@ func _build_interface() -> void:
 	_root.add_child(_build_button)
 
 	_inventory_button = Button.new()
-	_inventory_button.text = "Inventário [I]"
+	_inventory_button.text = "Inventário [△]"
 	_inventory_button.custom_minimum_size = Vector2(96.0, 36.0)
 	_inventory_button.focus_mode = Control.FOCUS_NONE
+	_inventory_button.tooltip_text = "Abrir inventário (I / Triângulo)"
 	_inventory_button.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	_inventory_button.offset_left = -212.0
 	_inventory_button.offset_right = -112.0
@@ -221,7 +222,7 @@ func _build_interface() -> void:
 	_inventory_panel.offset_left = -212.0
 	_inventory_panel.offset_right = -12.0
 	_inventory_panel.offset_top = 56.0
-	_inventory_panel.offset_bottom = 190.0
+	_inventory_panel.offset_bottom = 214.0
 	_inventory_panel.add_theme_stylebox_override("panel", _panel_style())
 	_inventory_panel.add_theme_constant_override("margin_left", 10)
 	_inventory_panel.add_theme_constant_override("margin_right", 10)
@@ -241,7 +242,7 @@ func _build_interface() -> void:
 	_inventory_details.add_theme_color_override("font_color", Color(0.85, 0.91, 0.96, 0.96))
 	inventory_column.add_child(_inventory_details)
 	var inventory_hint := Label.new()
-	inventory_hint.text = "F: comer · G: beber · E: coletar"
+	inventory_hint.text = "F/↑: comer · G/↓: beber · E/□: coletar · Ctrl/○: agachar\nL-stick: mover · R-stick: olhar · ✕: pular · L3: correr\n△: inventário · OPTIONS: construir · L2/R2: itens"
 	inventory_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	inventory_hint.add_theme_font_size_override("font_size", 9)
 	inventory_hint.add_theme_color_override("font_color", Color(0.65, 0.78, 0.84, 0.9))
@@ -440,6 +441,12 @@ func _activate_hotbar_slot(index: int) -> void:
 	_update_inventory_display()
 
 
+func _cycle_hotbar(direction: int) -> void:
+	var next_slot := posmod(_selected_hotbar_slot + direction, INVENTORY_NAMES.size())
+	_selected_hotbar_slot = next_slot
+	_update_inventory_display()
+
+
 func _update_inventory_display() -> void:
 	if _player == null:
 		return
@@ -613,13 +620,13 @@ func _layout_inventory_panel() -> void:
 		_inventory_panel.offset_left = 12.0
 		_inventory_panel.offset_right = 12.0 + panel_width
 		_inventory_panel.offset_top = panel_top
-		_inventory_panel.offset_bottom = panel_top + 144.0
+		_inventory_panel.offset_bottom = panel_top + 168.0
 	else:
 		_inventory_panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 		_inventory_panel.offset_left = -212.0
 		_inventory_panel.offset_right = -12.0
 		_inventory_panel.offset_top = 156.0
-		_inventory_panel.offset_bottom = 290.0
+		_inventory_panel.offset_bottom = 314.0
 
 
 func _layout_pickup_feedback() -> void:
@@ -648,18 +655,23 @@ func _layout_hotbar() -> void:
 		slot.custom_minimum_size = Vector2(slot_width, 46.0)
 
 
-func _unhandled_key_input(event: InputEvent) -> void:
-	var key := event as InputEventKey
-	if _player == null or key == null or not key.pressed or key.echo:
+func _unhandled_input(event: InputEvent) -> void:
+	if _player == null:
 		return
-	if key.keycode == KEY_I:
+	if event.is_action_pressed("inventory"):
 		_toggle_inventory()
 		get_viewport().set_input_as_handled()
-	elif key.keycode == KEY_V:
+	elif event.is_action_pressed("build_menu"):
 		_update_build_system()
 		if _build_system != null:
 			_toggle_build_menu()
 			get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("hotbar_previous"):
+		_cycle_hotbar(-1)
+		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("hotbar_next"):
+		_cycle_hotbar(1)
+		get_viewport().set_input_as_handled()
 
 
 func _select_buildable(buildable: PKBuildable) -> void:

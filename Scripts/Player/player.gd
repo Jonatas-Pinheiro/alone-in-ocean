@@ -27,7 +27,14 @@ const ACTION_SPRINT := &"sprint"
 const ACTION_INTERACT := &"interact"
 const ACTION_EAT := &"consume_food"
 const ACTION_DRINK := &"drink_water"
+const ACTION_CROUCH := &"crouch"
+const ACTION_LOOK_LEFT := &"look_left"
+const ACTION_LOOK_RIGHT := &"look_right"
+const ACTION_LOOK_UP := &"look_up"
+const ACTION_LOOK_DOWN := &"look_down"
 const INTERACTION_RAY_LENGTH := 10.0
+const CROUCH_HEIGHT_RATIO := 0.62
+const CROUCH_CAMERA_DROP := 0.55
 
 const DEFAULT_KEYS := {
 	&"move_forward": KEY_W,
@@ -52,6 +59,7 @@ const SYNC_PATHS: Array[NodePath] = [
 	^".:thirst",
 	^".:health",
 	^".:stamina",
+	^".:crouching",
 	^".:wood_count",
 	^".:plastic_count",
 	^".:scrap_count",
@@ -63,6 +71,7 @@ const SYNC_PATHS: Array[NodePath] = [
 @export var speed := 5.0
 @export var jump_velocity := 4.5
 @export var mouse_sensitivity := 0.002
+@export var gamepad_look_sensitivity := 2.6
 @export var acceleration := 40.0
 @export var body_model: Node3D
 
@@ -98,6 +107,10 @@ var plastic_count := 0
 var scrap_count := 0
 var food_count := 0
 var water_count := 0
+var crouching := false:
+	set(value):
+		crouching = value
+		_apply_crouch_pose()
 var display_name := "Sobrevivente"
 var _name_tag: Label3D
 
@@ -109,6 +122,13 @@ var gravity: float = ProjectSettings.get_setting(
 )
 
 @onready var camera: Camera3D = $Camera3D
+@onready var _collision_shape: CollisionShape3D = $CollisionShape3D
+
+var _active_capsule: CapsuleShape3D
+var _standing_capsule_height := 2.0
+var _standing_collision_y := 1.0
+var _standing_camera_height := 1.6
+var _standing_body_scale := Vector3.ONE
 
 var _mp: MultiplayerAPI
 var _is_local := false
@@ -124,6 +144,7 @@ var _in_yaw := 0.0
 var _in_pitch := 0.0
 var _in_jump_held := false
 var _in_sprint := false
+var _in_crouch := false
 var _jump_requested := false
 
 var _touch_move := Vector2.ZERO
@@ -142,6 +163,7 @@ var _sent_yaw := 0.0
 var _sent_pitch := 0.0
 var _sent_jump := false
 var _sent_sprint := false
+var _sent_crouch := false
 var _ticks_since_send := 999
 
 var _idle_ticks := 0
@@ -195,6 +217,7 @@ func _ready() -> void:
 	if not is_instance_valid(body_model):
 		body_model = get_node_or_null("KayKitVisual") as Node3D
 	if body_model != null:
+		_standing_body_scale = body_model.scale
 		body_model.visible = not _is_local
 	if _name_tag != null:
 		_name_tag.visible = not _is_local
@@ -205,6 +228,14 @@ func _ready() -> void:
 	_in_pitch = _pitch
 
 	_cam_base_pos = camera.position
+	_standing_camera_height = camera.position.y
+	_standing_collision_y = _collision_shape.position.y
+	var capsule := _collision_shape.shape as CapsuleShape3D
+	if capsule != null:
+		_standing_capsule_height = capsule.height
+		_active_capsule = capsule.duplicate() as CapsuleShape3D
+		_collision_shape.shape = _active_capsule
+	_apply_crouch_pose()
 	_base_fov = camera.fov
 	_fov = _base_fov
 	_prev_pos = global_position
@@ -316,20 +347,23 @@ func _unhandled_input(event: InputEvent) -> void:
 
 		return
 
-	if event.is_action_pressed("ui_cancel"):
+	if event.is_action_pressed("ui_cancel") and not event.is_action_pressed(ACTION_CROUCH):
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		return
 
 	if event.is_action_pressed(ACTION_INTERACT):
 		_try_collect_pickup()
+		get_viewport().set_input_as_handled()
 		return
 
 	if event.is_action_pressed(ACTION_EAT):
 		_request_survival_action("eat")
+		get_viewport().set_input_as_handled()
 		return
 
 	if event.is_action_pressed(ACTION_DRINK):
 		_request_survival_action("drink")
+		get_viewport().set_input_as_handled()
 		return
 
 	var click := event as InputEventMouseButton
@@ -377,6 +411,33 @@ func set_touch_jump(pressed: bool) -> void:
 
 func set_touch_sprint(pressed: bool) -> void:
 	_touch_sprint = pressed if _is_local else false
+
+
+func _apply_crouch_pose() -> void:
+	if _collision_shape == null or _active_capsule == null or camera == null:
+		return
+	var target_height := _standing_capsule_height
+	if crouching:
+		target_height = maxf(_active_capsule.radius * 2.0, _standing_capsule_height * CROUCH_HEIGHT_RATIO)
+	if not is_equal_approx(_active_capsule.height, target_height):
+		_active_capsule.height = target_height
+	_collision_shape.position.y = _standing_collision_y - (_standing_capsule_height - target_height) * 0.5
+	camera.position.y = _standing_camera_height - (CROUCH_CAMERA_DROP if crouching else 0.0)
+	if body_model != null:
+		var visual_scale := _standing_body_scale
+		if crouching:
+			visual_scale.y *= CROUCH_HEIGHT_RATIO
+		body_model.scale = visual_scale
+
+
+func _update_gamepad_look(delta: float) -> void:
+	var look := Input.get_vector(ACTION_LOOK_LEFT, ACTION_LOOK_RIGHT, ACTION_LOOK_UP, ACTION_LOOK_DOWN)
+	if look.length_squared() < 0.0001:
+		return
+	var turn := gamepad_look_sensitivity * delta
+	_yaw = wrapf(_yaw - look.x * turn, -PI, PI)
+	_pitch = clampf(_pitch - look.y * turn, -MAX_PITCH, MAX_PITCH)
+	_look_dx += look.x * turn / maxf(delta, 0.001)
 
 
 func apply_touch_look(relative: Vector2) -> void:
@@ -490,6 +551,7 @@ static func _damp(current: float, target: float, rate: float, dt: float) -> floa
 func _physics_process(delta: float) -> void:
 	# Somente o dono coleta a entrada.
 	if _is_local:
+		_update_gamepad_look(delta)
 		_push_local_input()
 
 		if camera_effects_enabled:
@@ -532,11 +594,12 @@ func _push_local_input() -> void:
 
 	var jump := Input.is_action_pressed(ACTION_JUMP) or _touch_jump
 	var sprint := Input.is_action_pressed(ACTION_SPRINT) or _touch_sprint
+	var crouch := Input.is_action_pressed(ACTION_CROUCH)
 
 	# O anfitrião aplica sua própria entrada diretamente.
 	if _is_server:
 		if _is_auth:
-			_apply_input(move, _yaw, _pitch, jump, sprint)
+			_apply_input(move, _yaw, _pitch, jump, sprint, crouch)
 
 		return
 
@@ -555,6 +618,7 @@ func _push_local_input() -> void:
 	var changed := (
 		jump != _sent_jump
 		or sprint != _sent_sprint
+		or crouch != _sent_crouch
 		or not move.is_equal_approx(_sent_move)
 		or absf(_yaw - _sent_yaw) > INPUT_EPSILON
 		or absf(_pitch - _sent_pitch) > INPUT_EPSILON
@@ -568,9 +632,10 @@ func _push_local_input() -> void:
 	_sent_pitch = _pitch
 	_sent_jump = jump
 	_sent_sprint = sprint
+	_sent_crouch = crouch
 	_ticks_since_send = 0
 
-	submit_input.rpc_id(SERVER_ID, move, _yaw, _pitch, jump, sprint)
+	submit_input.rpc_id(SERVER_ID, move, _yaw, _pitch, jump, sprint, crouch)
 
 
 # ---------------------------------------------------------------------------
@@ -583,7 +648,8 @@ func submit_input(
 	yaw: float,
 	pitch: float,
 	jump: bool,
-	sprint: bool
+	sprint: bool,
+	crouch: bool
 ) -> void:
 
 	if not _is_server or not _is_auth:
@@ -603,7 +669,7 @@ func submit_input(
 	if _rate_count > _rate_limit:
 		return
 
-	_apply_input(move, yaw, pitch, jump, sprint)
+	_apply_input(move, yaw, pitch, jump, sprint, crouch)
 
 
 func _apply_input(
@@ -611,7 +677,8 @@ func _apply_input(
 	yaw: float,
 	pitch: float,
 	jump: bool,
-	sprint: bool
+	sprint: bool,
+	crouch: bool
 ) -> void:
 
 	if not move.is_finite():
@@ -624,6 +691,7 @@ func _apply_input(
 	_in_yaw = wrapf(yaw, -PI, PI)
 	_in_pitch = clampf(pitch, -MAX_PITCH, MAX_PITCH)
 	_in_sprint = sprint
+	_in_crouch = crouch
 
 	if jump and not _in_jump_held:
 		_jump_requested = true
@@ -636,7 +704,9 @@ func _apply_input(
 # ---------------------------------------------------------------------------
 
 func _simulate(delta: float) -> void:
-	var wants_sprint := _in_sprint and _in_move.length_squared() > 0.01
+	if crouching != _in_crouch:
+		crouching = _in_crouch
+	var wants_sprint := _in_sprint and not _in_crouch and _in_move.length_squared() > 0.01
 	var sprinting := wants_sprint and not _sprint_recovery and stamina > 0.0
 	if sprinting:
 		stamina = maxf(0.0, stamina - 22.0 * delta)
@@ -682,7 +752,7 @@ func _simulate(delta: float) -> void:
 	# Equivale a basis * Vector3(x, 0, y), sem alocar vetores temporários.
 	var wish := basis.x * _in_move.x + basis.z * _in_move.y
 	var step := acceleration * delta
-	var movement_speed := speed * (1.5 if sprinting else 1.0)
+	var movement_speed := speed * (0.55 if _in_crouch else 1.0) * (1.5 if sprinting else 1.0)
 
 	velocity.x = move_toward(velocity.x, wish.x * movement_speed, step)
 	velocity.z = move_toward(velocity.z, wish.z * movement_speed, step)
