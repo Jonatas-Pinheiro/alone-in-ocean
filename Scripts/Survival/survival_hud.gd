@@ -1,6 +1,7 @@
 extends CanvasLayer
 
 const MOBILE_CONTROLS_SCRIPT := preload("res://Scripts/UI/mobile_controls.gd")
+const SETTINGS_MENU_SCRIPT := preload("res://Scripts/UI/settings_menu.gd")
 const ICON_HEALTH := preload("res://Assets/UI/status_health.svg")
 const ICON_HUNGER := preload("res://Assets/UI/status_hunger.svg")
 const ICON_THIRST := preload("res://Assets/UI/status_thirst.svg")
@@ -19,6 +20,7 @@ class CenterAimDot extends Control:
 
 
 var _root: Control
+var _settings_menu: Control
 var _player: SurvivalPlayer
 var _bars: Dictionary = {}
 var _inventory_label: Label
@@ -52,7 +54,10 @@ func _ready() -> void:
 	set_process_unhandled_input(true)
 	_build_interface()
 	_create_mobile_controls()
+	_create_settings_menu()
+	GameSettings.settings_changed.connect(_on_game_settings_changed)
 	_layout_hotbar()
+	_mobile_controls.refresh_custom_layout()
 
 
 func _process(delta: float) -> void:
@@ -61,10 +66,15 @@ func _process(delta: float) -> void:
 	if not is_instance_valid(_player) or _player.owner_peer_id != local_id:
 		_player = _find_local_player(local_id)
 		_last_counts.clear()
-
 	var has_player := _player != null
-	if _root.visible != has_player:
-		_root.visible = has_player
+	var hud_visible := has_player and GameSettings.hud_visible
+	if _root.visible != hud_visible:
+		_root.visible = hud_visible
+	if _settings_menu != null:
+		_settings_menu.call("set_available", has_player)
+	var native_hud := _get_native_build_hud()
+	if native_hud != null and native_hud.mode_bar != null:
+		native_hud.mode_bar.visible = hud_visible and _build_system != null
 	var touch_controls_visible := has_player and bool(_mobile_controls.get("touch_enabled"))
 	if _mobile_controls.visible != touch_controls_visible:
 		_mobile_controls.visible = touch_controls_visible
@@ -305,10 +315,46 @@ func _create_mobile_controls() -> void:
 	_mobile_controls.look_changed.connect(_on_touch_look)
 	_mobile_controls.action_held.connect(_on_touch_action_held)
 	_mobile_controls.action_pressed.connect(_on_touch_action_pressed)
-	_mobile_controls.set_reserved_controls([
+	_mobile_controls.set_reserved_controls(_get_mobile_reserved_controls())
+
+
+func _create_settings_menu() -> void:
+	_settings_menu = SETTINGS_MENU_SCRIPT.new() as Control
+	_settings_menu.name = "SettingsMenu"
+	add_child(_settings_menu)
+	_settings_menu.call("set_mobile_controls", _mobile_controls)
+	_settings_menu.connect("opened", _on_settings_opened)
+	_mobile_controls.set_reserved_controls(_get_mobile_reserved_controls())
+	_layout_settings_button()
+
+
+func _get_mobile_reserved_controls() -> Array:
+	var controls: Array = [
 		_status_panel, _build_button, _inventory_button, _build_menu,
 		_inventory_panel, _hotbar_panel,
-	])
+	]
+	var native_hud := _get_native_build_hud()
+	if native_hud != null and native_hud.mode_bar != null:
+		controls.append(native_hud.mode_bar)
+	if _settings_menu != null:
+		var settings_button := _settings_menu.get("settings_button") as Control
+		if settings_button != null:
+			controls.append(settings_button)
+	return controls
+
+
+func _get_native_build_hud() -> PKBuildHUD:
+	var scene := get_tree().current_scene
+	return scene.get_node_or_null("BuildingHUDLayer/PKBuildHUD") as PKBuildHUD if scene != null else null
+
+
+func _on_settings_opened() -> void:
+	_build_menu.visible = false
+	_inventory_panel.visible = false
+
+
+func _on_game_settings_changed() -> void:
+	_layout_all()
 
 
 func _make_stat_row(parent: VBoxContainer, title: String, icon_texture: Texture2D, fill_color: Color) -> ProgressBar:
@@ -372,15 +418,16 @@ func _update_build_system() -> void:
 	if _build_system == null or scene == null:
 		return
 
-	var native_hud := scene.get_node_or_null("BuildingHUDLayer/PKBuildHUD") as PKBuildHUD
-	if native_hud != null:
-		native_hud.mode_bar.visible = true
+		var native_hud := scene.get_node_or_null("BuildingHUDLayer/PKBuildHUD") as PKBuildHUD
+		if native_hud != null:
+			native_hud.mode_bar.visible = GameSettings.hud_visible and _player != null and _build_system != null
 		native_hud.catalog_panel.visible = false
 		native_hud.info_panel.visible = false
 		if system_changed:
 			_layout_native_mode_bar()
 			_layout_build_menu()
 			_layout_inventory_panel()
+			_mobile_controls.set_reserved_controls(_get_mobile_reserved_controls())
 
 
 func _rebuild_build_menu() -> void:
@@ -523,6 +570,49 @@ func _layout_all() -> void:
 	_layout_inventory_panel()
 	_layout_hotbar()
 	_layout_pickup_feedback()
+	_layout_settings_button()
+	_apply_hud_scale()
+	if _mobile_controls != null:
+		_mobile_controls.refresh_custom_layout()
+
+
+func _layout_settings_button() -> void:
+	if _settings_menu == null:
+		return
+	var button := _settings_menu.get("settings_button") as Button
+	if button == null:
+		return
+	button.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	button.offset_left = -58.0
+	button.offset_right = -12.0
+	button.offset_top = 112.0 if _root.size.x >= 680.0 else 8.0
+	button.offset_bottom = button.offset_top + 44.0
+
+
+func _apply_hud_scale() -> void:
+	if _root == null or _status_panel == null:
+		return
+	var scale_factor := GameSettings.hud_scale
+	var compact := _root.size.x < 680.0
+	_apply_control_scale(_status_panel, scale_factor, Vector2.ZERO)
+	var side_pivot := Vector2.ZERO if compact else Vector2(1.0, 0.0)
+	_apply_control_scale(_build_button, scale_factor, side_pivot)
+	_apply_control_scale(_inventory_button, scale_factor, side_pivot)
+	_apply_control_scale(_build_menu, scale_factor, side_pivot)
+	_apply_control_scale(_inventory_panel, scale_factor, side_pivot)
+	_apply_control_scale(_hotbar_panel, scale_factor, Vector2(0.5, 1.0))
+	_apply_control_scale(_pickup_feedback, scale_factor, Vector2(0.5, 0.0))
+	var scene := get_tree().current_scene
+	var native_hud := scene.get_node_or_null("BuildingHUDLayer/PKBuildHUD") as PKBuildHUD if scene != null else null
+	if native_hud != null and native_hud.mode_bar != null:
+		_apply_control_scale(native_hud.mode_bar, scale_factor, Vector2.ZERO)
+
+
+func _apply_control_scale(control: Control, scale_factor: float, normalized_pivot: Vector2) -> void:
+	if not is_instance_valid(control):
+		return
+	control.pivot_offset = control.size * normalized_pivot
+	control.scale = Vector2.ONE * scale_factor
 
 
 func _layout_status_panel() -> void:
@@ -579,14 +669,14 @@ func _layout_action_buttons() -> void:
 	else:
 		_build_button.custom_minimum_size.x = 96.0
 		_build_button.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-		_build_button.offset_left = -108.0
-		_build_button.offset_right = -12.0
+		_build_button.offset_left = -212.0
+		_build_button.offset_right = -116.0
 		_build_button.offset_top = 112.0
 		_build_button.offset_bottom = 148.0
 		_inventory_button.custom_minimum_size.x = 96.0
 		_inventory_button.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-		_inventory_button.offset_left = -212.0
-		_inventory_button.offset_right = -112.0
+		_inventory_button.offset_left = -316.0
+		_inventory_button.offset_right = -216.0
 		_inventory_button.offset_top = 112.0
 		_inventory_button.offset_bottom = 148.0
 
@@ -657,6 +747,8 @@ func _layout_hotbar() -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if _player == null:
+		return
+	if GameSettings.is_settings_open():
 		return
 	if event.is_action_pressed("inventory"):
 		_toggle_inventory()

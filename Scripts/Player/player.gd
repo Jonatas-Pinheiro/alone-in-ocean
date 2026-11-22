@@ -219,8 +219,9 @@ func _ready() -> void:
 	if body_model != null:
 		_standing_body_scale = body_model.scale
 		body_model.visible = not _is_local
-	if _name_tag != null:
-		_name_tag.visible = not _is_local
+		if _name_tag != null:
+			_name_tag.visible = not _is_local
+		GameSettings.apply_player_name_visibility(self, _is_local)
 
 	_yaw = rotation.y
 	_pitch = camera.rotation.x
@@ -270,6 +271,11 @@ func set_display_name(value: String) -> void:
 	display_name = value.strip_edges().substr(0, 20)
 	if _name_tag != null:
 		_name_tag.text = display_name
+
+
+func set_name_tag_visible(visible: bool) -> void:
+	if _name_tag != null and not _is_local:
+		_name_tag.visible = visible
 
 
 @rpc("authority", "call_local", "reliable")
@@ -327,6 +333,10 @@ func _create_state_synchronizer() -> void:
 # ---------------------------------------------------------------------------
 
 func _unhandled_input(event: InputEvent) -> void:
+	if GameSettings.is_settings_open():
+		if event.is_action_pressed("ui_cancel") and not event.is_action_pressed(ACTION_CROUCH):
+			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+		return
 	var motion := event as InputEventMouseMotion
 
 	if motion != null:
@@ -551,7 +561,8 @@ static func _damp(current: float, target: float, rate: float, dt: float) -> floa
 func _physics_process(delta: float) -> void:
 	# Somente o dono coleta a entrada.
 	if _is_local:
-		_update_gamepad_look(delta)
+		if not GameSettings.is_settings_open():
+			_update_gamepad_look(delta)
 		_push_local_input()
 
 		if camera_effects_enabled:
@@ -583,18 +594,23 @@ func _track_motion(delta: float) -> void:
 
 
 func _push_local_input() -> void:
-	var move := Input.get_vector(
-		ACTION_LEFT,
-		ACTION_RIGHT,
-		ACTION_FORWARD,
-		ACTION_BACK
-	)
-	if _touch_move.length_squared() > 0.0001:
-		move = _touch_move
-
-	var jump := Input.is_action_pressed(ACTION_JUMP) or _touch_jump
-	var sprint := Input.is_action_pressed(ACTION_SPRINT) or _touch_sprint
-	var crouch := Input.is_action_pressed(ACTION_CROUCH)
+	var settings_open := GameSettings.is_settings_open()
+	var move := Vector2.ZERO
+	var jump := false
+	var sprint := false
+	var crouch := false
+	if not settings_open:
+		move = Input.get_vector(
+			ACTION_LEFT,
+			ACTION_RIGHT,
+			ACTION_FORWARD,
+			ACTION_BACK
+		)
+		if _touch_move.length_squared() > 0.0001:
+			move = _touch_move
+		jump = Input.is_action_pressed(ACTION_JUMP) or _touch_jump
+		sprint = Input.is_action_pressed(ACTION_SPRINT) or _touch_sprint
+		crouch = Input.is_action_pressed(ACTION_CROUCH)
 
 	# O anfitrião aplica sua própria entrada diretamente.
 	if _is_server:

@@ -143,6 +143,8 @@ func _process(delta: float) -> void:
 
 
 func _input(event: InputEvent) -> void:
+	if GameSettings.is_settings_open():
+		return
 	var pad := event is InputEventJoypadButton or (event is InputEventJoypadMotion and absf(event.axis_value) > 0.4)
 	var desk := event is InputEventKey or event is InputEventMouseButton
 	if pad != _gamepad and (pad or desk):

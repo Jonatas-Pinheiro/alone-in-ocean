@@ -282,6 +282,8 @@ func aim_at_point(point: Vector2) -> void:
 # --- Input -------------------------------------------------------------------------------
 
 func _unhandled_input(event: InputEvent) -> void:
+	if GameSettings.is_settings_open():
+		return
 	if not input_enabled:
 		return
 	if event is InputEventMouseMotion:

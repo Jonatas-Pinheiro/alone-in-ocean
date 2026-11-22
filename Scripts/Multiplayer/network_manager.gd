@@ -558,6 +558,8 @@ func _refresh_session_ui() -> void:
 
 
 func _input(event: InputEvent) -> void:
+	if GameSettings.is_settings_open():
+		return
 	if not _session_active:
 		return
 	if event is InputEventKey and event.pressed and not event.echo:
