@@ -38,7 +38,7 @@ func _ready() -> void:
 		if sky != null:
 			_panorama_material = sky.sky_material as PanoramaSkyMaterial
 	GameSettings.apply_current_scene_preferences()
-	_build_hud()
+	_bind_hud()
 	GameSettings.settings_changed.connect(_on_game_settings_changed)
 	_apply_world_state()
 	_update_hud()
@@ -148,55 +148,31 @@ func _update_hud() -> void:
 	_phase_bar.value = seconds_until_change
 
 
-func _build_hud() -> void:
-	_hud = CanvasLayer.new()
-	_hud.name = "DayNightHUD"
-	_hud.layer = 6
-	_hud.visible = false
-	add_child(_hud)
-
-	_clock_panel = PanelContainer.new()
-	_clock_panel.name = "ClockPanel"
-	_clock_panel.anchor_left = 1.0
-	_clock_panel.anchor_right = 1.0
-	_clock_panel.offset_top = 16.0
-	_clock_panel.offset_bottom = 101.0
-	_clock_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var panel_style := StyleBoxFlat.new()
-	panel_style.bg_color = Color(0.035, 0.09, 0.14, 0.94)
-	panel_style.border_color = Color(0.18, 0.58, 0.72, 0.9)
-	panel_style.set_border_width_all(1)
-	panel_style.set_corner_radius_all(8)
-	panel_style.content_margin_left = 12.0
-	panel_style.content_margin_right = 12.0
-	panel_style.content_margin_top = 8.0
-	panel_style.content_margin_bottom = 8.0
-	_clock_panel.add_theme_stylebox_override("panel", panel_style)
-	_hud.add_child(_clock_panel)
-
-	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 4)
-	_clock_panel.add_child(column)
-
-	_time_label = Label.new()
-	_time_label.add_theme_font_size_override("font_size", 17)
-	_time_label.add_theme_color_override("font_color", Color(0.92, 0.96, 1.0))
-	column.add_child(_time_label)
-
-	_countdown_label = Label.new()
-	_countdown_label.add_theme_font_size_override("font_size", 12)
-	_countdown_label.add_theme_color_override("font_color", Color(0.68, 0.84, 0.9))
-	column.add_child(_countdown_label)
-
-	_phase_bar = ProgressBar.new()
-	_phase_bar.min_value = 0.0
-	_phase_bar.max_value = DAY_DURATION_SECONDS
-	_phase_bar.show_percentage = false
-	_phase_bar.custom_minimum_size = Vector2(210.0, 10.0)
-	_phase_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	column.add_child(_phase_bar)
+func _bind_hud() -> void:
+	_hud = get_parent().get_node_or_null("DayNightHUD") as CanvasLayer
+	if _hud == null:
+		push_warning("DayNightHUD.tscn não foi instanciada na cena World.")
+		return
+	_clock_panel = _hud.get_node("ClockPanel") as PanelContainer
+	_time_label = _hud.get_node("ClockPanel/ClockColumn/TimeLabel") as Label
+	_countdown_label = _hud.get_node("ClockPanel/ClockColumn/CountdownLabel") as Label
+	_phase_bar = _hud.get_node("ClockPanel/ClockColumn/PhaseBar") as ProgressBar
+	_clock_panel.add_theme_stylebox_override("panel", _clock_panel_style())
+	_clock_panel.add_theme_constant_override("margin_left", 12)
+	_clock_panel.add_theme_constant_override("margin_right", 12)
+	_clock_panel.add_theme_constant_override("margin_top", 8)
+	_clock_panel.add_theme_constant_override("margin_bottom", 8)
 	get_viewport().size_changed.connect(_layout_clock_panel)
 	_layout_clock_panel()
+
+
+func _clock_panel_style() -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.035, 0.09, 0.14, 0.94)
+	style.border_color = Color(0.18, 0.58, 0.72, 0.9)
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(8)
+	return style
 
 
 func _layout_clock_panel() -> void:

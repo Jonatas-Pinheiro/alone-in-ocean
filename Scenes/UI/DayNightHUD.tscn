@@ -1,0 +1,36 @@
+[gd_scene format=3]
+
+[node name="DayNightHUD" type="CanvasLayer"]
+layer = 6
+visible = false
+
+[node name="ClockPanel" type="PanelContainer" parent="."]
+layout_mode = 0
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -252.0
+offset_top = 16.0
+offset_right = -16.0
+offset_bottom = 101.0
+mouse_filter = 2
+
+[node name="ClockColumn" type="VBoxContainer" parent="ClockPanel"]
+layout_mode = 2
+
+[node name="TimeLabel" type="Label" parent="ClockPanel/ClockColumn"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 17
+theme_override_colors/font_color = Color(0.92, 0.96, 1, 1)
+
+[node name="CountdownLabel" type="Label" parent="ClockPanel/ClockColumn"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+theme_override_colors/font_color = Color(0.68, 0.84, 0.9, 1)
+
+[node name="PhaseBar" type="ProgressBar" parent="ClockPanel/ClockColumn"]
+custom_minimum_size = Vector2(210, 10)
+layout_mode = 2
+min_value = 0.0
+max_value = 720.0
+show_percentage = false
+mouse_filter = 2

@@ -1,9 +1,12 @@
 class_name PKBuildHUD
 extends Control
+
+const INFO_COST_ENTRY_SCENE: PackedScene = preload("res://addons/building_kit/ui/info_cost_entry.tscn")
 ## The whole building interface in one node: mode bar (top), catalog (bottom), an info box
 ## (piece, cost or drag total, why the ghost is red, controls) and short messages.
 ## [codeblock]
-## var hud := PKBuildHUD.new()
+## var hud_scene := preload("res://addons/building_kit/ui/build_hud.tscn")
+## var hud := hud_scene.instantiate()
 ## $CanvasLayer.add_child(hud)
 ## hud.bind($PKBuildSystem3D)   # or a PKBuildSystem2D
 ## [/codeblock]
@@ -13,98 +16,60 @@ extends Control
 @export var message_time := 2.6
 
 var system: Node
-var catalog_panel := PKCatalogPanel.new()
-var mode_bar := PKModeBar.new()
-var info_panel := PanelContainer.new()
-var info_title := Label.new()
-var info_cost := HBoxContainer.new()
-var info_status := Label.new()
-var info_hint := Label.new()
-## Health, stability, why an upgrade is refused...
-var info_detail := Label.new()
-## "Save as blueprint", shown in the select mode when pieces are selected.
-var blueprint_button := Button.new()
-var toast := Label.new()
-
-var _crosshair := _Crosshair.new()
+var catalog_panel: PKCatalogPanel
+var mode_bar: PKModeBar
+var info_panel: PanelContainer
+var info_title: Label
+var info_cost: HBoxContainer
+var info_status: Label
+var info_hint: Label
+var info_detail: Label
+var blueprint_button: Button
+var toast: Label
+var _crosshair: Control
 var _toast_time := 0.0
 var _gamepad := false
 
 
-class _Crosshair extends Control:
-	var hud: PKBuildHUD
-
-	func _draw() -> void:
-		if hud == null or hud.system == null or not hud.system.is_virtual_cursor():
-			return
-		var point: Vector2 = hud.get_cursor_screen_position() - global_position
-		draw_arc(point, 10.0, 0.0, TAU, 24, Color(1, 1, 1, 0.9), 2.0)
-		draw_circle(point, 2.5, PKUIStyle.accent)
-
-	func _process(_delta: float) -> void:
-		queue_redraw()
-
-
-func _init() -> void:
-	name = "PKBuildHUD"
+func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	theme = PKUIStyle.make_theme()
-
-	_crosshair.hud = self
-	_crosshair.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_crosshair.set_anchors_preset(Control.PRESET_FULL_RECT)
-	add_child(_crosshair)
-
-	mode_bar.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	mode_bar.position = Vector2(16, 16)
-	add_child(mode_bar)
-
-	catalog_panel.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE, Control.PRESET_MODE_MINSIZE, 16)
-	catalog_panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	add_child(catalog_panel)
-
-	info_panel.name = "PKInfo"
-	info_panel.custom_minimum_size = Vector2(300, 0)
-	info_panel.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT, Control.PRESET_MODE_MINSIZE, 16)
-	info_panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	_crosshair = $Crosshair
+	catalog_panel = $PKCatalogPanel
+	mode_bar = $PKModeBar
+	info_panel = $InfoPanel
+	info_title = $InfoPanel/InfoColumn/InfoTitle
+	info_cost = $InfoPanel/InfoColumn/InfoCost
+	info_status = $InfoPanel/InfoColumn/InfoStatus
+	info_detail = $InfoPanel/InfoColumn/InfoDetail
+	blueprint_button = $InfoPanel/InfoColumn/BlueprintButton
+	info_hint = $InfoPanel/InfoColumn/InfoHint
+	toast = $Toast
+	blueprint_button.pressed.connect(func() -> void:
+		if system != null:
+			system.controller.save_selection_as_blueprint()
+	)
 	info_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override(&"separation", 4)
-	info_panel.add_child(box)
 	info_title.add_theme_font_size_override(&"font_size", 18)
 	info_title.add_theme_color_override(&"font_color", PKUIStyle.accent)
-	box.add_child(info_title)
 	info_cost.add_theme_constant_override(&"separation", 4)
-	box.add_child(info_cost)
 	info_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	box.add_child(info_status)
 	info_detail.add_theme_font_size_override(&"font_size", 13)
 	info_detail.add_theme_color_override(&"font_color", PKUIStyle.muted_text)
-	box.add_child(info_detail)
 	blueprint_button.focus_mode = Control.FOCUS_NONE
 	blueprint_button.visible = false
-	blueprint_button.pressed.connect(func() -> void: system.controller.save_selection_as_blueprint())
-	box.add_child(blueprint_button)
 	info_hint.add_theme_font_size_override(&"font_size", 12)
 	info_hint.add_theme_color_override(&"font_color", PKUIStyle.muted_text)
 	info_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	box.add_child(info_hint)
-	add_child(info_panel)
-
-	toast.name = "PKToast"
 	toast.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	toast.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP, Control.PRESET_MODE_MINSIZE, 128)
-	toast.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	toast.add_theme_font_size_override(&"font_size", 17)
 	toast.add_theme_color_override(&"font_outline_color", Color(0, 0, 0, 0.85))
 	toast.add_theme_constant_override(&"outline_size", 6)
 	toast.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	toast.modulate.a = 0.0
-	add_child(toast)
 
 
-## Connects the interface to a build system (2D or 3D).
 func bind(p_system: Node) -> void:
 	system = p_system
 	catalog_panel.bind(system)
@@ -140,6 +105,11 @@ func _process(delta: float) -> void:
 	if _toast_time > 0.0:
 		_toast_time -= delta
 		toast.modulate.a = clampf(_toast_time / 0.5, 0.0, 1.0)
+	if _crosshair != null:
+		_crosshair.visible = system != null and system.is_virtual_cursor()
+		if _crosshair.visible:
+			var mark := _crosshair.get_node("CrosshairMark") as Control
+			mark.position = get_cursor_screen_position() - mark.size * 0.5
 
 
 func _input(event: InputEvent) -> void:
@@ -158,8 +128,7 @@ func _refresh_info() -> void:
 		return
 	var controller: PKBuildController = system.controller
 	var builder: PKBuilder = system.builder
-	for child in info_cost.get_children():
-		child.queue_free()
+	_clear_cost_entries()
 	info_status.text = ""
 	info_status.remove_theme_color_override(&"font_color")
 	info_detail.text = ""
@@ -246,9 +215,7 @@ func _refresh_info() -> void:
 			_describe_hover(builder, controller.hover_uid, false)
 			var hovered := builder.layout.get_piece(controller.hover_uid)
 			if hovered != null and hovered.is_damaged():
-				var label := Label.new()
-				label.text = PKText.t("Repair:")
-				info_cost.add_child(label)
+				_add_cost_entry(PKText.t("Repair:"), PKUIStyle.muted_text)
 				_show_cost(builder.repair_cost(hovered.uid), builder, 1)
 			elif hovered != null:
 				info_detail.text = PKText.reason(&"not_damaged")
@@ -281,43 +248,43 @@ func _describe_hover(builder: PKBuilder, uid: int, refund: bool) -> void:
 	info_detail.text = "  ·  ".join(details)
 	var falling := builder.dependents_of(uid).size()
 	if refund:
-		var label := Label.new()
-		label.text = PKText.t("Refund:")
-		info_cost.add_child(label)
+		_add_cost_entry(PKText.t("Refund:"), PKUIStyle.muted_text)
 		_show_cost(builder.refund_for(uid), builder, 1, false)
-		if falling > 0:
-			info_status.text += "  " + PKText.t("(+%d resting on it)") % falling
+	if falling > 0:
+		info_status.text += "  " + PKText.t("(+%d resting on it)") % falling
+
+
+func _clear_cost_entries() -> void:
+	for child in info_cost.get_children():
+		child.queue_free()
+
+
+func _add_cost_entry(text: String, color: Color = PKUIStyle.text_color, icon: Texture2D = null) -> void:
+	var entry := INFO_COST_ENTRY_SCENE.instantiate() as HBoxContainer
+	var icon_node := entry.get_node("Icon") as TextureRect
+	icon_node.texture = icon
+	icon_node.visible = icon != null
+	var text_node := entry.get_node("Value") as Label
+	text_node.text = text
+	text_node.add_theme_color_override(&"font_color", color)
+	info_cost.add_child(entry)
 
 
 func _show_cost(cost: Dictionary, builder: PKBuilder, count: int, check := true) -> void:
 	var handler := builder.cost_handler
 	if count > 1:
-		var times := Label.new()
-		times.text = "×%d" % count
-		info_cost.add_child(times)
+		_add_cost_entry("×%d" % count, PKUIStyle.muted_text)
 	if cost.is_empty():
-		var free := Label.new()
-		free.text = PKText.t("Free")
-		free.add_theme_color_override(&"font_color", PKUIStyle.muted_text)
-		info_cost.add_child(free)
+		_add_cost_entry(PKText.t("Free"), PKUIStyle.muted_text)
 		return
 	for item_id in cost:
 		var amount := int(cost[item_id])
 		var texture := handler.item_icon(item_id)
-		if texture != null:
-			var icon := TextureRect.new()
-			icon.texture = texture
-			icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-			icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-			icon.custom_minimum_size = Vector2(22, 22)
-			info_cost.add_child(icon)
-		var label := Label.new()
-		var have := handler.count(item_id)
-		label.text = ("%d" % amount if texture != null else "%d %s" % [amount, handler.item_name(item_id)])
+		var text := "%d" % amount if texture != null else "%d %s" % [amount, handler.item_name(item_id)]
 		if check and not handler.is_free():
-			label.text += " / %d" % have
-			label.add_theme_color_override(&"font_color", PKUIStyle.text_color if have >= amount else PKUIStyle.bad)
-		info_cost.add_child(label)
+			text += " / %d" % handler.count(item_id)
+		var color := PKUIStyle.text_color if not check or handler.count(item_id) >= amount else PKUIStyle.bad
+		_add_cost_entry(text, color, texture)
 
 
 func _hint(keys: Array) -> String:

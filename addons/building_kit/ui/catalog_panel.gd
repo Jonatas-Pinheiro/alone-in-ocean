@@ -5,7 +5,8 @@ extends PanelContainer
 ## piece to pick it; on a gamepad, D-pad left / right picks the previous / next piece and
 ## D-pad down the next category (keyboard: [ ] and Tab).
 ## [codeblock]
-## var panel := PKCatalogPanel.new()
+## var panel_scene := preload("res://addons/building_kit/ui/catalog_panel.tscn")
+## var panel := panel_scene.instantiate() as PKCatalogPanel
 ## add_child(panel)
 ## panel.bind(build_system)   # a PKBuildSystem2D or PKBuildSystem3D
 ## [/codeblock]
@@ -27,33 +28,28 @@ const BLUEPRINTS := &"__blueprints__"
 var system: Node
 var thumbnails := PKThumbnails.new()
 
-var _tabs := TabBar.new()
-var _row := HBoxContainer.new()
-var _scroll := ScrollContainer.new()
+const PIECE_SCENE := preload("res://addons/building_kit/ui/catalog_piece.tscn")
+const BLUEPRINT_SCENE := preload("res://addons/building_kit/ui/catalog_blueprint.tscn")
+const COST_ICON_SCENE := preload("res://addons/building_kit/ui/catalog_cost_icon.tscn")
+const COST_LABEL_SCENE := preload("res://addons/building_kit/ui/catalog_cost_label.tscn")
+const COST_FREE_SCENE := preload("res://addons/building_kit/ui/catalog_cost_free.tscn")
+var _tabs: TabBar
+var _row: HBoxContainer
+var _scroll: ScrollContainer
 var _buttons := {}  # id -> Button
 var _categories: Array[StringName] = []
 var _category: StringName = &""
 var _all := false
 
 
-func _init() -> void:
+func _ready() -> void:
 	name = "PKCatalogPanel"
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override(&"separation", 8)
-	add_child(box)
-	_tabs.focus_mode = Control.FOCUS_NONE
-	_tabs.tab_changed.connect(_on_tab_changed)
-	_tabs.clip_tabs = false
-	box.add_child(_tabs)
-	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
-	_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_tabs = $Box/Tabs
+	_scroll = $Box/Scroll
+	_row = $Box/Scroll/Items
 	_scroll.custom_minimum_size = Vector2(0, button_size.y + 8)
-	box.add_child(_scroll)
-	_row.add_theme_constant_override(&"separation", 8)
-	_scroll.add_child(_row)
-	add_child(thumbnails)
+	_tabs.tab_changed.connect(_on_tab_changed)
 	thumbnails.icon_ready.connect(_on_icon_ready)
-
 
 ## Connects the panel to a build system (2D or 3D) and fills it.
 func bind(p_system: Node) -> void:
@@ -128,82 +124,32 @@ func _fill() -> void:
 
 
 func _make_button(buildable: PKBuildable) -> Button:
-	var button := Button.new()
-	button.toggle_mode = true
-	button.focus_mode = Control.FOCUS_NONE
+	var button: Button = PIECE_SCENE.instantiate()
 	button.custom_minimum_size = button_size
 	button.tooltip_text = _tooltip(buildable)
 	button.pressed.connect(func() -> void:
 		system.select_buildable(buildable)
 		piece_chosen.emit(buildable))
 	button.mouse_entered.connect(func() -> void: piece_hovered.emit(buildable))
-	var box := VBoxContainer.new()
-	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, 6)
-	box.add_theme_constant_override(&"separation", 2)
-	button.add_child(box)
-	var icon := TextureRect.new()
-	icon.name = "Icon"
-	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	icon.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	var icon: TextureRect = button.get_node("Content/Icon")
 	icon.texture = thumbnails.get_icon(buildable, system.builder.grid.cell_size)
 	if icon.texture == null:
 		icon.texture = _swatch(buildable.color)
-	box.add_child(icon)
-	var title := Label.new()
-	title.text = buildable.get_title()
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override(&"font_size", 12)
-	title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	title.clip_text = true
-	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	box.add_child(title)
-	var cost_row := HBoxContainer.new()
-	cost_row.name = "Cost"
-	cost_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	cost_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	cost_row.add_theme_constant_override(&"separation", 3)
-	box.add_child(cost_row)
+	button.get_node("Content/Title").text = buildable.get_title()
 	return button
 
 
 ## A button of the Blueprints tab: title, number of pieces and total cost.
 func _make_blueprint_button(blueprint: PKBlueprint) -> Button:
-	var button := Button.new()
-	button.toggle_mode = true
-	button.focus_mode = Control.FOCUS_NONE
+	var button: Button = BLUEPRINT_SCENE.instantiate()
 	button.custom_minimum_size = Vector2(button_size.x * 1.25, button_size.y)
 	button.set_meta(&"blueprint", blueprint)
 	button.pressed.connect(func() -> void:
 		system.select_blueprint(blueprint)
 		blueprint_chosen.emit(blueprint))
-	var box := VBoxContainer.new()
-	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, 6)
-	button.add_child(box)
-	var icon := TextureRect.new()
-	icon.texture = _blueprint_icon()
-	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	icon.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	box.add_child(icon)
-	var title := Label.new()
-	title.text = "%s (%d)" % [blueprint.title, blueprint.size()]
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override(&"font_size", 12)
-	title.clip_text = true
-	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	box.add_child(title)
-	var cost_row := HBoxContainer.new()
-	cost_row.name = "Cost"
-	cost_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	cost_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	box.add_child(cost_row)
+	button.get_node("Content/Icon").texture = _blueprint_icon()
+	button.get_node("Content/Title").text = "%s (%d)" % [blueprint.title, blueprint.size()]
 	return button
-
 
 static func _blueprint_key(blueprint: PKBlueprint) -> StringName:
 	return StringName("__bp_%d" % blueprint.get_instance_id())
@@ -249,8 +195,7 @@ func refresh_states() -> void:
 			var affordable := builder.cost_handler.can_pay(total)
 			blueprint_button.modulate = Color.WHITE if affordable else Color(0.62, 0.62, 0.66, 0.6)
 			blueprint_button.set_meta(&"available", affordable)
-			blueprint_button.tooltip_text = "%s
-%s %s" % [blueprint.title, PKText.t("Cost:"), PKText.cost_text(total, builder.cost_handler)]
+			blueprint_button.tooltip_text = "%s\n%s %s" % [blueprint.title, PKText.t("Cost:"), PKText.cost_text(total, builder.cost_handler)]
 			_fill_cost_dict(blueprint_button.find_child("Cost", true, false), total, builder)
 			continue
 		var buildable := builder.catalog.get_buildable(id)
@@ -280,11 +225,9 @@ func _fill_cost_dict(row: HBoxContainer, cost: Dictionary, builder: PKBuilder) -
 	for child in row.get_children():
 		child.queue_free()
 	if cost.is_empty():
-		var free := Label.new()
+		var free: Label = COST_FREE_SCENE.instantiate()
 		free.text = PKText.t("Free")
-		free.add_theme_font_size_override(&"font_size", 12)
 		free.add_theme_color_override(&"font_color", PKUIStyle.muted_text)
-		free.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		row.add_child(free)
 		return
 	var handler: PKCost = builder.cost_handler
@@ -292,20 +235,13 @@ func _fill_cost_dict(row: HBoxContainer, cost: Dictionary, builder: PKBuilder) -
 		var amount := int(cost[item_id])
 		var texture := handler.item_icon(item_id)
 		if texture != null:
-			var icon := TextureRect.new()
+			var icon: TextureRect = COST_ICON_SCENE.instantiate()
 			icon.texture = texture
-			icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-			icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-			icon.custom_minimum_size = Vector2(16, 16)
-			icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			row.add_child(icon)
-		var label := Label.new()
+		var label: Label = COST_LABEL_SCENE.instantiate()
 		label.text = str(amount) if texture != null else "%d %s" % [amount, handler.item_name(item_id)]
-		label.add_theme_font_size_override(&"font_size", 12)
 		label.add_theme_color_override(&"font_color", PKUIStyle.text_color if handler.count(item_id) >= amount else PKUIStyle.bad)
-		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		row.add_child(label)
-
 
 func _tooltip(buildable: PKBuildable) -> String:
 	var builder: PKBuilder = system.builder

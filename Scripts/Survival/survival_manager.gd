@@ -51,7 +51,9 @@ func _on_session_ended() -> void:
 
 
 func _process(delta: float) -> void:
-	if not multiplayer.is_server() or _network_manager == null or not _network_manager.is_session_active():
+	if _network_manager == null or not _network_manager.is_session_active():
+		return
+	if not multiplayer.is_server():
 		return
 
 	_spawn_elapsed += delta

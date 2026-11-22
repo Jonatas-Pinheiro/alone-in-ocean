@@ -5,9 +5,6 @@ signal look_changed(delta: Vector2)
 signal action_held(action: StringName, pressed: bool)
 signal action_pressed(action: StringName)
 
-const JOYSTICK_ICON := preload("res://Assets/UI/Kenney/InputPrompts/Generic/Default/generic_joystick.png")
-const FINGER_ICON := preload("res://Assets/UI/Kenney/InputPrompts/Generic/Default/generic_button_finger.png")
-const UP_ICON := preload("res://Assets/UI/Kenney/InputPrompts/Generic/Default/generic_stick_up.png")
 const BUTTON_WIDTH := 70.0
 const BUTTON_HEIGHT := 48.0
 const STICK_RADIUS := 54.0
@@ -17,7 +14,6 @@ var _move_touch_id := -1
 var _look_touch_id := -1
 var _move_value := Vector2.ZERO
 var _buttons: Dictionary = {}
-var _captions: Dictionary = {}
 var _reserved_controls: Array = []
 var _menu_open := false
 var _edit_mode := false
@@ -26,23 +22,47 @@ var _dragged_action: StringName = &""
 var _drag_touch_id := -1
 var _drag_moved := false
 var _pending_drag_position := Vector2.ZERO
+var _stick_pad: TextureRect
+var _stick_nub: TextureRect
 
 
 func _ready() -> void:
-	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	touch_enabled = DisplayServer.is_touchscreen_available() or OS.has_feature("mobile")
 	_button_scale = GameSettings.mobile_button_scale
 	visible = touch_enabled
+	_stick_pad = $JoystickPad
+	_stick_nub = $JoystickNub
+	_buttons = {
+		&"place": $Touch_place,
+		&"jump": $Touch_jump,
+		&"interact": $Touch_interact,
+		&"sprint": $Touch_sprint,
+	}
+	for action: StringName in _buttons:
+		var button := _buttons[action] as Button
+		button.visible = touch_enabled
+		button.focus_mode = Control.FOCUS_NONE
+		button.mouse_filter = Control.MOUSE_FILTER_STOP
+		button.add_theme_font_size_override("font_size", 9)
+		button.add_theme_color_override("font_color", Color(0.95, 0.98, 1.0, 0.98))
+		button.add_theme_color_override("font_hover_color", Color.WHITE)
+		button.add_theme_color_override("font_pressed_color", Color.WHITE)
+		button.add_theme_stylebox_override("normal", _button_style(Color(0.035, 0.07, 0.11, 0.70)))
+		button.add_theme_stylebox_override("hover", _button_style(Color(0.08, 0.20, 0.28, 0.88)))
+		button.add_theme_stylebox_override("pressed", _button_style(Color(0.10, 0.38, 0.48, 0.95)))
+		if action == &"jump" or action == &"sprint":
+			button.button_down.connect(func() -> void: action_held.emit(action, true))
+			button.button_up.connect(func() -> void: action_held.emit(action, false))
+		else:
+			button.pressed.connect(func() -> void: action_pressed.emit(action))
+	_stick_pad.visible = touch_enabled
+	_stick_nub.visible = touch_enabled
 	if not touch_enabled:
 		return
-
-	_create_button(&"place", "Colocar", FINGER_ICON, "Confirmar construção")
-	_create_button(&"jump", "Pular", UP_ICON, "Pular")
-	_create_button(&"interact", "Usar", FINGER_ICON, "Coletar recurso apontado")
-	_create_button(&"sprint", "Correr", JOYSTICK_ICON, "Segure para correr")
 	resized.connect(_layout_buttons)
 	_layout_buttons()
+	_update_stick_visual()
 
 
 func set_reserved_controls(controls: Array) -> void:
@@ -61,83 +81,25 @@ func set_menu_open(open: bool) -> void:
 		action_held.emit(&"sprint", false)
 	_menu_open = open
 	for button: Button in _buttons.values():
-		button.visible = not open
-	for caption: Label in _captions.values():
-		caption.visible = not open
-	queue_redraw()
+		button.visible = touch_enabled and not open
+	_stick_pad.visible = touch_enabled and not open
+	_stick_nub.visible = touch_enabled and not open
 
 
 func set_edit_mode(enabled: bool) -> void:
 	_commit_drag()
 	_edit_mode = enabled and touch_enabled
 	for action: StringName in _buttons:
-		var button: Button = _buttons[action]
+		var button := _buttons[action] as Button
 		button.tooltip_text = "Arraste para mover" if _edit_mode else ""
 		var normal_color := Color(0.08, 0.36, 0.47, 0.94) if _edit_mode else Color(0.035, 0.07, 0.11, 0.70)
 		button.add_theme_stylebox_override("normal", _button_style(normal_color))
-	queue_redraw()
 
 
 func refresh_custom_layout() -> void:
 	_button_scale = GameSettings.mobile_button_scale
 	_layout_buttons()
-
-
-func _create_button(action: StringName, label: String, icon: Texture2D, hint: String) -> void:
-	var button := Button.new()
-	button.name = "Touch_%s" % String(action)
-	button.text = ""
-	button.icon = _fit_icon(icon, 18)
-	button.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	button.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP
-	button.tooltip_text = hint
-	button.focus_mode = Control.FOCUS_NONE
-	button.mouse_filter = Control.MOUSE_FILTER_STOP
-	button.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
-	button.custom_minimum_size = Vector2(BUTTON_WIDTH, BUTTON_HEIGHT)
-	button.add_theme_font_size_override("font_size", 9)
-	button.add_theme_color_override("font_color", Color(0.95, 0.98, 1.0, 0.98))
-	button.add_theme_color_override("font_hover_color", Color.WHITE)
-	button.add_theme_color_override("font_pressed_color", Color.WHITE)
-	button.add_theme_stylebox_override("normal", _button_style(Color(0.035, 0.07, 0.11, 0.70)))
-	button.add_theme_stylebox_override("hover", _button_style(Color(0.08, 0.20, 0.28, 0.88)))
-	button.add_theme_stylebox_override("pressed", _button_style(Color(0.10, 0.38, 0.48, 0.95)))
-	var caption := Label.new()
-	caption.name = "Caption"
-	caption.text = label
-	caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	caption.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	caption.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	caption.add_theme_font_size_override("font_size", 8)
-	caption.add_theme_color_override("font_color", Color(0.95, 0.98, 1.0, 0.96))
-	caption.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
-	add_child(button)
-	add_child(caption)
-	_buttons[action] = button
-	_captions[action] = caption
-
-	if action == &"jump" or action == &"sprint":
-		button.button_down.connect(func() -> void: action_held.emit(action, true))
-		button.button_up.connect(func() -> void: action_held.emit(action, false))
-	else:
-		button.pressed.connect(func() -> void: action_pressed.emit(action))
-
-
-func _fit_icon(texture: Texture2D, maximum_size: int) -> Texture2D:
-	if texture == null:
-		return null
-	var source_image := texture.get_image()
-	if source_image == null or source_image.is_empty():
-		return texture
-	var image := source_image.duplicate() as Image
-	var longest_side := maxi(image.get_width(), image.get_height())
-	if longest_side <= maximum_size:
-		return texture
-	var ratio := float(maximum_size) / float(longest_side)
-	var width := maxi(1, roundi(float(image.get_width()) * ratio))
-	var height := maxi(1, roundi(float(image.get_height()) * ratio))
-	image.resize(width, height, Image.INTERPOLATE_LANCZOS)
-	return ImageTexture.create_from_image(image)
+	_update_stick_visual()
 
 
 func _button_style(color: Color) -> StyleBoxFlat:
@@ -177,40 +139,29 @@ func _layout_buttons() -> void:
 			positions[action] = Vector2(x, size.y - 12.0 - (index + 1) * button_height - index * 6.0)
 			index += 1
 	for action: StringName in _buttons:
-		var button: Button = _buttons[action]
+		var button := _buttons[action] as Button
 		var button_position: Vector2 = positions[action]
 		var saved_position := GameSettings.get_mobile_button_position(action)
 		if saved_position.x >= 0.0:
-			button_position = Vector2(
-				saved_position.x * size.x,
-				saved_position.y * size.y
-			)
+			button_position = Vector2(saved_position.x * size.x, saved_position.y * size.y)
 		button_position = _find_safe_button_position(action, button_position, Vector2(button_width, button_height))
 		button.custom_minimum_size = Vector2(button_width, button_height)
 		button.offset_left = button_position.x
 		button.offset_top = button_position.y
 		button.offset_right = button_position.x + button_width
 		button.offset_bottom = button_position.y + button_height
-		var caption: Label = _captions[action]
-		caption.offset_left = button_position.x
-		caption.offset_top = button_position.y + button_height - 16.0
-		caption.offset_right = button_position.x + button_width
-		caption.offset_bottom = button_position.y + button_height
-	queue_redraw()
 
 
-func _draw() -> void:
-	if not touch_enabled or size.y <= 0.0 or _menu_open:
+func _update_stick_visual() -> void:
+	if _stick_pad == null or _stick_nub == null or size.y <= 0.0:
 		return
 	var center := _stick_center()
 	var radius := _stick_radius()
-	draw_circle(center, radius + 7.0, Color(0.02, 0.05, 0.08, 0.27))
-	draw_circle(center, radius, Color(0.08, 0.16, 0.22, 0.42))
-	draw_arc(center, radius, 0.0, TAU, 48, Color(0.82, 0.92, 0.98, 0.42), 2.0, true)
+	_stick_pad.position = center - Vector2.ONE * radius
+	_stick_pad.size = Vector2.ONE * radius * 2.0
 	var knob_center := center + _move_value * (radius - 16.0)
-	draw_circle(knob_center, 23.0, Color(0.13, 0.33, 0.43, 0.78))
-	draw_arc(knob_center, 23.0, 0.0, TAU, 32, Color(0.92, 0.97, 1.0, 0.58), 1.5, true)
-	draw_texture_rect(JOYSTICK_ICON, Rect2(knob_center - Vector2(10, 10), Vector2(20, 20)), false, Color(0.98, 0.99, 1.0, 0.9))
+	_stick_nub.size = Vector2(46.0, 46.0)
+	_stick_nub.position = knob_center - _stick_nub.size * 0.5
 
 
 func _input(event: InputEvent) -> void:
@@ -238,7 +189,7 @@ func _input(event: InputEvent) -> void:
 				_move_touch_id = -1
 				_move_value = Vector2.ZERO
 				movement_changed.emit(Vector2.ZERO)
-				queue_redraw()
+				_update_stick_visual()
 				get_viewport().set_input_as_handled()
 			elif touch.index == _look_touch_id:
 				_look_touch_id = -1
@@ -258,7 +209,7 @@ func _handle_layout_edit(event: InputEvent) -> void:
 		var touch := event as InputEventScreenTouch
 		if touch.pressed:
 			for action: StringName in _buttons:
-				var button: Button = _buttons[action]
+				var button := _buttons[action] as Button
 				if button.visible and button.get_global_rect().has_point(touch.position):
 					_dragged_action = action
 					_drag_touch_id = touch.index
@@ -308,12 +259,6 @@ func _move_dragged_button(relative: Vector2) -> void:
 	button.offset_right = next_position.x + button.size.x
 	button.offset_bottom = next_position.y + button.size.y
 	_pending_drag_position = Vector2(next_position.x / maxf(size.x, 1.0), next_position.y / maxf(size.y, 1.0))
-	var caption := _captions.get(_dragged_action) as Label
-	if caption != null:
-		caption.offset_left = button.offset_left
-		caption.offset_top = button.offset_top + button.size.y - 16.0
-		caption.offset_right = button.offset_right
-		caption.offset_bottom = button.offset_bottom
 
 
 func _commit_drag() -> void:
@@ -379,7 +324,7 @@ func _update_move(position: Vector2) -> void:
 	var center := _stick_center()
 	_move_value = ((position - center) / _stick_radius()).limit_length(1.0)
 	movement_changed.emit(_move_value)
-	queue_redraw()
+	_update_stick_visual()
 
 
 func _stick_center() -> Vector2:

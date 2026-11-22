@@ -5,14 +5,15 @@
 [ext_resource type="Script" uid="uid://d2jhj181tsnqb" path="res://Scripts/Multiplayer/network_manager.gd" id="4_5jr8x"]
 [ext_resource type="PackedScene" uid="uid://61i4l7kx381y" path="res://demo.tscn" id="5_87yka"]
 [ext_resource type="Texture2D" uid="uid://442dv505vhfn" path="res://kenney_skyboxes/Skyboxes/skybox-day.png" id="5_hveh7"]
-[ext_resource type="Script" uid="uid://b4d8xa2s8hpka" path="res://Scripts/World/fps_counter.gd" id="7_87yka"]
+[ext_resource type="PackedScene" path="res://Scenes/UI/FPSCounter.tscn" id="7_fps"]
 [ext_resource type="PackedScene" uid="uid://c5ycl7x7quuvj" path="res://Assets/Models/Character/Male/free_tung_tung_tung_tung_sahur.glb" id="8_kjd5s"]
 [ext_resource type="Script" path="res://Scenes/Building/BuildingKitBootstrap.gd" id="9_p7pgw"]
 [ext_resource type="Script" path="res://Scripts/Multiplayer/building_network.gd" id="10_building_network"]
 [ext_resource type="Script" path="res://Scripts/Survival/survival_manager.gd" id="11_survival"]
-[ext_resource type="Script" path="res://Scripts/Survival/survival_hud.gd" id="12_survival_hud"]
+[ext_resource type="PackedScene" path="res://Scenes/UI/SurvivalHUD.tscn" id="12_survival_hud"]
 [ext_resource type="Script" path="res://Scripts/World/day_night_cycle.gd" id="13_day_night_cycle"]
-[ext_resource type="Material" uid="uid://vupq4xdw4cs4" path="res://water_material.tres" id="14_water"]
+[ext_resource type="PackedScene" path="res://Scenes/UI/DayNightHUD.tscn" id="14_day_night_hud"]
+[ext_resource type="Material" uid="uid://vupq4xdw4cs4" path="res://water_material.tres" id="15_water"]
 
 [sub_resource type="PanoramaSkyMaterial" id="PanoramaSkyMaterial_kfx5d"]
 panorama = ExtResource("5_hveh7")
@@ -57,14 +58,13 @@ environment = SubResource("Environment_f5ye2")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.007284403, 0.014441967, 0.0064120293)
 visible = true
 mesh = SubResource("PlaneMesh_f5ye2")
-surface_material_override/0 = ExtResource("14_water")
+surface_material_override/0 = ExtResource("15_water")
 
 [node name="Demo" parent="." unique_id=1513367113 instance=ExtResource("5_87yka")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.15, 0)
 visible = false
 
-[node name="CanvasLayer" type="CanvasLayer" parent="." unique_id=1790566965]
-script = ExtResource("7_87yka")
+[node name="FPSCounter" parent="." instance=ExtResource("7_fps")]
 
 [node name="TungTungSahur" parent="." unique_id=309947954 instance=ExtResource("8_kjd5s")]
 transform = Transform3D(15.130408, 0, 0, 0, 8.07906, 0, 0, 0, 1, -0.9554572, 0, -43.848854)
@@ -80,8 +80,9 @@ spawnable_scenes = PackedStringArray("res://Scenes/Survival/SalvagePickup.tscn")
 script = ExtResource("11_survival")
 raft_root = NodePath("../Floor")
 
-[node name="SurvivalHUD" type="CanvasLayer" parent="."]
-script = ExtResource("12_survival_hud")
+[node name="SurvivalHUD" parent="." instance=ExtResource("12_survival_hud")]
+
+[node name="DayNightHUD" parent="." instance=ExtResource("14_day_night_hud")]
 
 [node name="DayNightCycle" type="Node" parent="."]
 script = ExtResource("13_day_night_cycle")

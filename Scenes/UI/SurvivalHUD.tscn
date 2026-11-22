@@ -1,0 +1,332 @@
+[gd_scene load_steps=11 format=3]
+
+[ext_resource type="Script" path="res://Scripts/Survival/survival_hud.gd" id="1_script"]
+[ext_resource type="Texture2D" path="res://Assets/UI/status_health.svg" id="2_health"]
+[ext_resource type="Texture2D" path="res://Assets/UI/status_hunger.svg" id="3_hunger"]
+[ext_resource type="Texture2D" path="res://Assets/UI/status_thirst.svg" id="4_thirst"]
+[ext_resource type="Texture2D" path="res://Assets/UI/status_stamina.svg" id="5_stamina"]
+[ext_resource type="AudioStream" path="res://Assets/Audio/pickup_chime.wav" id="6_pickup"]
+[ext_resource type="PackedScene" path="res://Scenes/UI/MobileControls.tscn" id="7_mobile"]
+[ext_resource type="PackedScene" path="res://Scenes/UI/SettingsMenu.tscn" id="8_settings"]
+[ext_resource type="Texture2D" path="res://Assets/UI/Kenney/GameIcons/wrench.png" id="9_wrench"]
+[ext_resource type="Texture2D" path="res://Assets/UI/Kenney/GameIcons/shoppingBasket.png" id="10_basket"]
+
+[node name="SurvivalHUD" type="CanvasLayer"]
+layer = 5
+script = ExtResource("1_script")
+
+[node name="HudRoot" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="StatusPanel" type="PanelContainer" parent="HudRoot"]
+offset_left = 12.0
+offset_top = 12.0
+custom_minimum_size = Vector2(188, 0)
+mouse_filter = 2
+
+[node name="StatusColumn" type="VBoxContainer" parent="HudRoot/StatusPanel"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="HealthRow" type="HBoxContainer" parent="HudRoot/StatusPanel/StatusColumn"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="HealthIcon" type="TextureRect" parent="HudRoot/StatusPanel/StatusColumn/HealthRow"]
+custom_minimum_size = Vector2(15, 15)
+layout_mode = 2
+texture = ExtResource("2_health")
+expand_mode = 1
+stretch_mode = 5
+mouse_filter = 2
+
+[node name="HealthBar" type="ProgressBar" parent="HudRoot/StatusPanel/StatusColumn/HealthRow"]
+custom_minimum_size = Vector2(145, 9)
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 0.0
+max_value = 100.0
+value = 100.0
+show_percentage = false
+mouse_filter = 2
+
+[node name="HungerRow" type="HBoxContainer" parent="HudRoot/StatusPanel/StatusColumn"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="HungerIcon" type="TextureRect" parent="HudRoot/StatusPanel/StatusColumn/HungerRow"]
+custom_minimum_size = Vector2(15, 15)
+layout_mode = 2
+texture = ExtResource("3_hunger")
+expand_mode = 1
+stretch_mode = 5
+mouse_filter = 2
+
+[node name="HungerBar" type="ProgressBar" parent="HudRoot/StatusPanel/StatusColumn/HungerRow"]
+custom_minimum_size = Vector2(145, 9)
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 0.0
+max_value = 100.0
+value = 100.0
+show_percentage = false
+mouse_filter = 2
+
+[node name="ThirstRow" type="HBoxContainer" parent="HudRoot/StatusPanel/StatusColumn"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="ThirstIcon" type="TextureRect" parent="HudRoot/StatusPanel/StatusColumn/ThirstRow"]
+custom_minimum_size = Vector2(15, 15)
+layout_mode = 2
+texture = ExtResource("4_thirst")
+expand_mode = 1
+stretch_mode = 5
+mouse_filter = 2
+
+[node name="ThirstBar" type="ProgressBar" parent="HudRoot/StatusPanel/StatusColumn/ThirstRow"]
+custom_minimum_size = Vector2(145, 9)
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 0.0
+max_value = 100.0
+value = 100.0
+show_percentage = false
+mouse_filter = 2
+
+[node name="StaminaRow" type="HBoxContainer" parent="HudRoot/StatusPanel/StatusColumn"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="StaminaIcon" type="TextureRect" parent="HudRoot/StatusPanel/StatusColumn/StaminaRow"]
+custom_minimum_size = Vector2(15, 15)
+layout_mode = 2
+texture = ExtResource("5_stamina")
+expand_mode = 1
+stretch_mode = 5
+mouse_filter = 2
+
+[node name="StaminaBar" type="ProgressBar" parent="HudRoot/StatusPanel/StatusColumn/StaminaRow"]
+custom_minimum_size = Vector2(145, 9)
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 0.0
+max_value = 100.0
+value = 100.0
+show_percentage = false
+mouse_filter = 2
+
+[node name="InventoryLabel" type="Label" parent="HudRoot/StatusPanel/StatusColumn"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="Consumables" type="HBoxContainer" parent="HudRoot/StatusPanel/StatusColumn"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="EatButton" type="Button" parent="HudRoot/StatusPanel/StatusColumn/Consumables"]
+visible = false
+custom_minimum_size = Vector2(54, 22)
+layout_mode = 2
+focus_mode = 0
+text = "Comer"
+
+[node name="DrinkButton" type="Button" parent="HudRoot/StatusPanel/StatusColumn/Consumables"]
+visible = false
+custom_minimum_size = Vector2(54, 22)
+layout_mode = 2
+focus_mode = 0
+text = "Beber"
+
+[node name="BuildButton" type="Button" parent="HudRoot"]
+visible = false
+layout_mode = 0
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -108.0
+offset_top = 12.0
+offset_right = -12.0
+offset_bottom = 48.0
+custom_minimum_size = Vector2(96, 36)
+focus_mode = 0
+tooltip_text = "Abrir menu de construção (V / OPTIONS)"
+text = "Construir [V]"
+icon = ExtResource("9_wrench")
+icon_alignment = 0
+icon_max_width = 18
+
+[node name="InventoryButton" type="Button" parent="HudRoot"]
+layout_mode = 0
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -212.0
+offset_top = 12.0
+offset_right = -112.0
+offset_bottom = 48.0
+custom_minimum_size = Vector2(96, 36)
+focus_mode = 0
+tooltip_text = "Abrir inventário (I / Triângulo)"
+text = "Inventário [△]"
+icon = ExtResource("10_basket")
+icon_alignment = 0
+icon_max_width = 18
+
+[node name="BuildMenu" type="PanelContainer" parent="HudRoot"]
+visible = false
+layout_mode = 0
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -204.0
+offset_top = 56.0
+offset_right = -12.0
+offset_bottom = 192.0
+
+[node name="BuildMenuColumn" type="VBoxContainer" parent="HudRoot/BuildMenu"]
+layout_mode = 2
+
+[node name="MenuTitle" type="Label" parent="HudRoot/BuildMenu/BuildMenuColumn"]
+layout_mode = 2
+text = "Peças · Setas/Tab + Enter"
+
+[node name="BuildGrid" type="GridContainer" parent="HudRoot/BuildMenu/BuildMenuColumn"]
+layout_mode = 2
+columns = 2
+
+[node name="RotateButton" type="Button" parent="HudRoot/BuildMenu/BuildMenuColumn"]
+custom_minimum_size = Vector2(0, 28)
+layout_mode = 2
+focus_mode = 2
+text = "Girar peça [R]"
+
+[node name="InventoryPanel" type="PanelContainer" parent="HudRoot"]
+visible = false
+layout_mode = 0
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -212.0
+offset_top = 56.0
+offset_right = -12.0
+offset_bottom = 214.0
+
+[node name="InventoryColumn" type="VBoxContainer" parent="HudRoot/InventoryPanel"]
+layout_mode = 2
+
+[node name="InventoryTitle" type="Label" parent="HudRoot/InventoryPanel/InventoryColumn"]
+layout_mode = 2
+text = "Inventário"
+
+[node name="InventoryDetails" type="Label" parent="HudRoot/InventoryPanel/InventoryColumn"]
+layout_mode = 2
+
+[node name="InventoryHint" type="Label" parent="HudRoot/InventoryPanel/InventoryColumn"]
+layout_mode = 2
+text = "F/↑: comer · G/↓: beber · E/□: coletar · Ctrl/○: agachar\nL-stick: mover · R-stick: olhar · ✕: pular · L3: correr\n△: inventário · OPTIONS: construir · L2/R2: itens"
+autowrap_mode = 2
+
+[node name="HotbarPanel" type="PanelContainer" parent="HudRoot"]
+layout_mode = 0
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+
+grow_horizontal = 2
+
+[node name="HotbarRow" type="HBoxContainer" parent="HudRoot/HotbarPanel"]
+layout_mode = 2
+
+[node name="HotbarSlot1" type="Button" parent="HudRoot/HotbarPanel/HotbarRow"]
+custom_minimum_size = Vector2(56, 46)
+layout_mode = 2
+size_flags_horizontal = 3
+focus_mode = 0
+text = "Madeira\n00"
+
+[node name="HotbarSlot2" type="Button" parent="HudRoot/HotbarPanel/HotbarRow"]
+custom_minimum_size = Vector2(56, 46)
+layout_mode = 2
+size_flags_horizontal = 3
+focus_mode = 0
+text = "Plástico\n00"
+
+[node name="HotbarSlot3" type="Button" parent="HudRoot/HotbarPanel/HotbarRow"]
+custom_minimum_size = Vector2(56, 46)
+layout_mode = 2
+size_flags_horizontal = 3
+focus_mode = 0
+text = "Sucata\n00"
+
+[node name="HotbarSlot4" type="Button" parent="HudRoot/HotbarPanel/HotbarRow"]
+custom_minimum_size = Vector2(56, 46)
+layout_mode = 2
+size_flags_horizontal = 3
+focus_mode = 0
+text = "Comida\n00"
+
+[node name="HotbarSlot5" type="Button" parent="HudRoot/HotbarPanel/HotbarRow"]
+custom_minimum_size = Vector2(56, 46)
+layout_mode = 2
+size_flags_horizontal = 3
+focus_mode = 0
+text = "Água\n00"
+
+[node name="PickupFeedback" type="Label" parent="HudRoot"]
+visible = false
+layout_mode = 0
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -120.0
+offset_top = 72.0
+offset_right = 120.0
+offset_bottom = 108.0
+horizontal_alignment = 1
+
+[node name="AimReticle" type="Control" parent="HudRoot"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+z_index = 20
+
+[node name="Shadow" type="ColorRect" parent="HudRoot/AimReticle"]
+layout_mode = 0
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -4.0
+offset_top = -4.0
+offset_right = 4.0
+offset_bottom = 4.0
+mouse_filter = 2
+color = Color(0.02, 0.04, 0.06, 0.72)
+
+[node name="Center" type="ColorRect" parent="HudRoot/AimReticle"]
+layout_mode = 0
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -2.0
+offset_top = -2.0
+offset_right = 2.0
+offset_bottom = 2.0
+mouse_filter = 2
+color = Color(1, 1, 1, 0.98)
+
+[node name="MobileControls" parent="HudRoot" instance=ExtResource("7_mobile")]
+
+[node name="SettingsMenu" parent="." instance=ExtResource("8_settings")]
+
+[node name="PickupAudio" type="AudioStreamPlayer" parent="."]
+stream = ExtResource("6_pickup")
+volume_db = -8.0

@@ -1,7 +1,6 @@
 extends CanvasLayer
 
-const MOBILE_CONTROLS_SCRIPT := preload("res://Scripts/UI/mobile_controls.gd")
-const SETTINGS_MENU_SCRIPT := preload("res://Scripts/UI/settings_menu.gd")
+const BUILDABLE_BUTTON_SCENE: PackedScene = preload("res://Scenes/UI/BuildableButton.tscn")
 const ICON_HEALTH := preload("res://Assets/UI/status_health.svg")
 const ICON_HUNGER := preload("res://Assets/UI/status_hunger.svg")
 const ICON_THIRST := preload("res://Assets/UI/status_thirst.svg")
@@ -10,13 +9,6 @@ const PICKUP_SOUND := preload("res://Assets/Audio/pickup_chime.wav")
 const INVENTORY_NAMES: Array[String] = ["Madeira", "Plástico", "Sucata", "Comida", "Água"]
 const UI_REFRESH_INTERVAL := 0.1
 const BUILD_SYSTEM_REFRESH_INTERVAL := 0.5
-
-
-class CenterAimDot extends Control:
-	func _draw() -> void:
-		var center := size * 0.5
-		draw_circle(center, 4.0, Color(0.02, 0.04, 0.06, 0.72))
-		draw_circle(center, 2.2, Color(1.0, 1.0, 1.0, 0.98))
 
 
 var _root: Control
@@ -52,17 +44,21 @@ var _build_system_refresh_elapsed := 0.0
 func _ready() -> void:
 	layer = 5
 	set_process_unhandled_input(true)
-	_build_interface()
-	_create_mobile_controls()
-	_create_settings_menu()
+	_bind_scene_nodes()
+	_connect_scene_signals()
 	GameSettings.settings_changed.connect(_on_game_settings_changed)
-	_layout_hotbar()
-	_mobile_controls.refresh_custom_layout()
+	_layout_all()
+	_mobile_controls.call("refresh_custom_layout")
 
 
 func _process(delta: float) -> void:
 	_update_pickup_feedback(delta)
-	var local_id := multiplayer.get_unique_id()
+	var local_id := 1
+	var network_manager := get_parent().get_node_or_null("NetworkManager")
+	if network_manager != null and network_manager.is_session_active():
+		local_id = multiplayer.get_unique_id()
+	else:
+		_player = null
 	if not is_instance_valid(_player) or _player.owner_peer_id != local_id:
 		_player = _find_local_player(local_id)
 		_last_counts.clear()
@@ -118,214 +114,122 @@ func _find_local_player(peer_id: int) -> SurvivalPlayer:
 	return null
 
 
-func _build_interface() -> void:
-	_root = Control.new()
-	_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(_root)
+func _bind_scene_nodes() -> void:
+	_root = $HudRoot
+	_status_panel = $HudRoot/StatusPanel
+	_bars = {
+		&"health": $HudRoot/StatusPanel/StatusColumn/HealthRow/HealthBar,
+		&"hunger": $HudRoot/StatusPanel/StatusColumn/HungerRow/HungerBar,
+		&"thirst": $HudRoot/StatusPanel/StatusColumn/ThirstRow/ThirstBar,
+		&"stamina": $HudRoot/StatusPanel/StatusColumn/StaminaRow/StaminaBar,
+	}
+	_inventory_label = $HudRoot/StatusPanel/StatusColumn/InventoryLabel
+	_eat_button = $HudRoot/StatusPanel/StatusColumn/Consumables/EatButton
+	_drink_button = $HudRoot/StatusPanel/StatusColumn/Consumables/DrinkButton
+	_build_button = $HudRoot/BuildButton
+	_inventory_button = $HudRoot/InventoryButton
+	_build_menu = $HudRoot/BuildMenu
+	_build_grid = $HudRoot/BuildMenu/BuildMenuColumn/BuildGrid
+	_inventory_panel = $HudRoot/InventoryPanel
+	_inventory_details = $HudRoot/InventoryPanel/InventoryColumn/InventoryDetails
+	_hotbar_panel = $HudRoot/HotbarPanel
+	_hotbar_buttons = [
+		$HudRoot/HotbarPanel/HotbarRow/HotbarSlot1,
+		$HudRoot/HotbarPanel/HotbarRow/HotbarSlot2,
+		$HudRoot/HotbarPanel/HotbarRow/HotbarSlot3,
+		$HudRoot/HotbarPanel/HotbarRow/HotbarSlot4,
+		$HudRoot/HotbarPanel/HotbarRow/HotbarSlot5,
+	]
+	_pickup_feedback = $HudRoot/PickupFeedback
+	_aim_dot = $HudRoot/AimReticle
+	_pickup_audio = $PickupAudio
+	_mobile_controls = $HudRoot/MobileControls
+	_settings_menu = $SettingsMenu
 
-	_status_panel = PanelContainer.new()
-	_status_panel.position = Vector2(12.0, 12.0)
-	_status_panel.custom_minimum_size = Vector2(188.0, 0.0)
-	_status_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_status_panel.add_theme_stylebox_override("panel", _panel_style())
 	_status_panel.add_theme_constant_override("margin_left", 8)
 	_status_panel.add_theme_constant_override("margin_right", 8)
 	_status_panel.add_theme_constant_override("margin_top", 7)
 	_status_panel.add_theme_constant_override("margin_bottom", 7)
-	_root.add_child(_status_panel)
-
-	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 3)
-	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_status_panel.add_child(column)
-	_bars[&"health"] = _make_stat_row(column, "Vida", ICON_HEALTH, Color(0.92, 0.25, 0.28))
-	_bars[&"hunger"] = _make_stat_row(column, "Fome", ICON_HUNGER, Color(0.98, 0.62, 0.18))
-	_bars[&"thirst"] = _make_stat_row(column, "Sede", ICON_THIRST, Color(0.25, 0.68, 0.98))
-	_bars[&"stamina"] = _make_stat_row(column, "Estamina", ICON_STAMINA, Color(0.40, 0.88, 0.48))
-
-	_inventory_label = Label.new()
+	_build_menu.add_theme_stylebox_override("panel", _panel_style())
+	_inventory_panel.add_theme_stylebox_override("panel", _panel_style())
+	_hotbar_panel.add_theme_stylebox_override("panel", _panel_style())
+	for panel: PanelContainer in [_build_menu, _inventory_panel, _hotbar_panel]:
+		panel.add_theme_constant_override("margin_left", 7)
+		panel.add_theme_constant_override("margin_right", 7)
+		panel.add_theme_constant_override("margin_top", 7)
+		panel.add_theme_constant_override("margin_bottom", 7)
+	$HudRoot/BuildMenu/BuildMenuColumn.add_theme_constant_override("separation", 5)
+	$HudRoot/BuildMenu/BuildMenuColumn/BuildGrid.add_theme_constant_override("h_separation", 5)
+	$HudRoot/BuildMenu/BuildMenuColumn/BuildGrid.add_theme_constant_override("v_separation", 5)
+	$HudRoot/InventoryPanel/InventoryColumn.add_theme_constant_override("separation", 4)
+	$HudRoot/HotbarPanel/HotbarRow.add_theme_constant_override("separation", 4)
 	_inventory_label.add_theme_font_size_override("font_size", 9)
 	_inventory_label.add_theme_color_override("font_color", Color(0.85, 0.91, 0.96, 0.9))
-	_inventory_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	column.add_child(_inventory_label)
-
-	var consumables := HBoxContainer.new()
-	consumables.add_theme_constant_override("separation", 4)
-	consumables.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	column.add_child(consumables)
-	_eat_button = _make_consumable_button("Comer", "eat")
-	_drink_button = _make_consumable_button("Beber", "drink")
-	consumables.add_child(_eat_button)
-	consumables.add_child(_drink_button)
-
-	_build_button = Button.new()
-	_build_button.text = "Construir [V]"
-	_build_button.custom_minimum_size = Vector2(96.0, 36.0)
-	_build_button.focus_mode = Control.FOCUS_NONE
-	_build_button.tooltip_text = "Abrir menu de construção (V / OPTIONS)"
-	_build_button.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	_build_button.offset_left = -108.0
-	_build_button.offset_right = -12.0
-	_build_button.offset_top = 12.0
-	_build_button.offset_bottom = 48.0
+	_inventory_details.add_theme_font_size_override("font_size", 11)
+	_inventory_details.add_theme_color_override("font_color", Color(0.85, 0.91, 0.96, 0.96))
+	$HudRoot/InventoryPanel/InventoryColumn/InventoryTitle.add_theme_font_size_override("font_size", 14)
+	$HudRoot/InventoryPanel/InventoryColumn/InventoryHint.add_theme_font_size_override("font_size", 9)
+	$HudRoot/InventoryPanel/InventoryColumn/InventoryHint.add_theme_color_override("font_color", Color(0.65, 0.78, 0.84, 0.9))
+	$HudRoot/BuildMenu/BuildMenuColumn/MenuTitle.add_theme_font_size_override("font_size", 9)
+	$HudRoot/BuildMenu/BuildMenuColumn/RotateButton.add_theme_font_size_override("font_size", 10)
 	_build_button.add_theme_font_size_override("font_size", 12)
+	_inventory_button.add_theme_font_size_override("font_size", 11)
+	_eat_button.add_theme_font_size_override("font_size", 9)
+	_drink_button.add_theme_font_size_override("font_size", 9)
 	_build_button.add_theme_stylebox_override("normal", _button_style(Color(0.04, 0.12, 0.18, 0.82)))
 	_build_button.add_theme_stylebox_override("hover", _button_style(Color(0.08, 0.25, 0.32, 0.94)))
 	_build_button.add_theme_stylebox_override("pressed", _button_style(Color(0.10, 0.38, 0.48, 0.98)))
-	_build_button.visible = false
-	_build_button.pressed.connect(_toggle_build_menu)
-	_root.add_child(_build_button)
-
-	_inventory_button = Button.new()
-	_inventory_button.text = "Inventário [△]"
-	_inventory_button.custom_minimum_size = Vector2(96.0, 36.0)
-	_inventory_button.focus_mode = Control.FOCUS_NONE
-	_inventory_button.tooltip_text = "Abrir inventário (I / Triângulo)"
-	_inventory_button.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	_inventory_button.offset_left = -212.0
-	_inventory_button.offset_right = -112.0
-	_inventory_button.offset_top = 12.0
-	_inventory_button.offset_bottom = 48.0
-	_inventory_button.add_theme_font_size_override("font_size", 11)
 	_inventory_button.add_theme_stylebox_override("normal", _button_style(Color(0.04, 0.12, 0.18, 0.82)))
 	_inventory_button.add_theme_stylebox_override("hover", _button_style(Color(0.08, 0.25, 0.32, 0.94)))
-	_inventory_button.pressed.connect(_toggle_inventory)
-	_root.add_child(_inventory_button)
-
-	_build_menu = PanelContainer.new()
-	_build_menu.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	_build_menu.offset_left = -204.0
-	_build_menu.offset_right = -12.0
-	_build_menu.offset_top = 56.0
-	_build_menu.offset_bottom = 192.0
-	_build_menu.add_theme_stylebox_override("panel", _panel_style())
-	_build_menu.add_theme_constant_override("margin_left", 7)
-	_build_menu.add_theme_constant_override("margin_right", 7)
-	_build_menu.add_theme_constant_override("margin_top", 7)
-	_build_menu.add_theme_constant_override("margin_bottom", 7)
-	_build_menu.visible = false
-	_root.add_child(_build_menu)
-
-	var menu_column := VBoxContainer.new()
-	menu_column.add_theme_constant_override("separation", 5)
-	_build_menu.add_child(menu_column)
-	var menu_title := Label.new()
-	menu_title.text = "Peças · Setas/Tab + Enter"
-	menu_title.add_theme_font_size_override("font_size", 9)
-	menu_column.add_child(menu_title)
-	_build_grid = GridContainer.new()
-	_build_grid.columns = 2
-	_build_grid.add_theme_constant_override("h_separation", 5)
-	_build_grid.add_theme_constant_override("v_separation", 5)
-	menu_column.add_child(_build_grid)
-	var rotate_button := Button.new()
-	rotate_button.text = "Girar peça [R]"
-	rotate_button.custom_minimum_size = Vector2(0.0, 28.0)
-	rotate_button.focus_mode = Control.FOCUS_ALL
-	rotate_button.add_theme_font_size_override("font_size", 10)
-	rotate_button.pressed.connect(_rotate_build_piece)
-	menu_column.add_child(rotate_button)
-
-	_inventory_panel = PanelContainer.new()
-	_inventory_panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	_inventory_panel.offset_left = -212.0
-	_inventory_panel.offset_right = -12.0
-	_inventory_panel.offset_top = 56.0
-	_inventory_panel.offset_bottom = 214.0
-	_inventory_panel.add_theme_stylebox_override("panel", _panel_style())
-	_inventory_panel.add_theme_constant_override("margin_left", 10)
-	_inventory_panel.add_theme_constant_override("margin_right", 10)
-	_inventory_panel.add_theme_constant_override("margin_top", 8)
-	_inventory_panel.add_theme_constant_override("margin_bottom", 8)
-	_inventory_panel.visible = false
-	_root.add_child(_inventory_panel)
-	var inventory_column := VBoxContainer.new()
-	inventory_column.add_theme_constant_override("separation", 4)
-	_inventory_panel.add_child(inventory_column)
-	var inventory_title := Label.new()
-	inventory_title.text = "Inventário"
-	inventory_title.add_theme_font_size_override("font_size", 14)
-	inventory_column.add_child(inventory_title)
-	_inventory_details = Label.new()
-	_inventory_details.add_theme_font_size_override("font_size", 11)
-	_inventory_details.add_theme_color_override("font_color", Color(0.85, 0.91, 0.96, 0.96))
-	inventory_column.add_child(_inventory_details)
-	var inventory_hint := Label.new()
-	inventory_hint.text = "F/↑: comer · G/↓: beber · E/□: coletar · Ctrl/○: agachar\nL-stick: mover · R-stick: olhar · ✕: pular · L3: correr\n△: inventário · OPTIONS: construir · L2/R2: itens"
-	inventory_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	inventory_hint.add_theme_font_size_override("font_size", 9)
-	inventory_hint.add_theme_color_override("font_color", Color(0.65, 0.78, 0.84, 0.9))
-	inventory_column.add_child(inventory_hint)
-
-	_hotbar_panel = PanelContainer.new()
-	_hotbar_panel.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	_hotbar_panel.add_theme_stylebox_override("panel", _panel_style())
-	_hotbar_panel.add_theme_constant_override("margin_left", 6)
-	_hotbar_panel.add_theme_constant_override("margin_right", 6)
-	_hotbar_panel.add_theme_constant_override("margin_top", 5)
-	_hotbar_panel.add_theme_constant_override("margin_bottom", 5)
-	_root.add_child(_hotbar_panel)
-	var hotbar_row := HBoxContainer.new()
-	hotbar_row.add_theme_constant_override("separation", 4)
-	_hotbar_panel.add_child(hotbar_row)
-	for index in range(INVENTORY_NAMES.size()):
-		var slot := Button.new()
-		slot.name = "HotbarSlot%d" % (index + 1)
-		slot.text = "%s\n00" % INVENTORY_NAMES[index]
-		slot.custom_minimum_size = Vector2(56.0, 46.0)
-		slot.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		slot.focus_mode = Control.FOCUS_NONE
-		slot.add_theme_font_size_override("font_size", 9)
-		slot.add_theme_stylebox_override("normal", _button_style(Color(0.08, 0.20, 0.27, 0.94)))
-		slot.add_theme_stylebox_override("hover", _button_style(Color(0.10, 0.34, 0.43, 0.98)))
-		slot.add_theme_stylebox_override("pressed", _button_style(Color(0.13, 0.40, 0.49, 0.98)))
-		slot.pressed.connect(_activate_hotbar_slot.bind(index))
-		hotbar_row.add_child(slot)
-		_hotbar_buttons.append(slot)
-	_pickup_feedback = Label.new()
+	_eat_button.add_theme_stylebox_override("normal", _button_style(Color(0.06, 0.13, 0.17, 0.86)))
+	_drink_button.add_theme_stylebox_override("normal", _button_style(Color(0.06, 0.13, 0.17, 0.86)))
 	_pickup_feedback.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_pickup_feedback.add_theme_font_size_override("font_size", 18)
 	_pickup_feedback.add_theme_color_override("font_color", Color(1.0, 0.91, 0.56, 1.0))
 	_pickup_feedback.add_theme_color_override("font_outline_color", Color(0.015, 0.035, 0.05, 0.95))
 	_pickup_feedback.add_theme_constant_override("outline_size", 4)
-	_pickup_feedback.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_pickup_feedback.visible = false
-	_root.add_child(_pickup_feedback)
 
-	_aim_dot = CenterAimDot.new()
-	_aim_dot.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_aim_dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_aim_dot.z_index = 20
-	_root.add_child(_aim_dot)
-
-	_pickup_audio = AudioStreamPlayer.new()
-	_pickup_audio.stream = PICKUP_SOUND
-	_pickup_audio.volume_db = -8.0
-	add_child(_pickup_audio)
-	_root.resized.connect(_layout_all)
-	_layout_all()
-
-
-func _create_mobile_controls() -> void:
-	_mobile_controls = MOBILE_CONTROLS_SCRIPT.new()
-	_mobile_controls.name = "MobileControls"
-	_root.add_child(_mobile_controls)
-	_mobile_controls.movement_changed.connect(_on_touch_movement)
-	_mobile_controls.look_changed.connect(_on_touch_look)
-	_mobile_controls.action_held.connect(_on_touch_action_held)
-	_mobile_controls.action_pressed.connect(_on_touch_action_pressed)
-	_mobile_controls.set_reserved_controls(_get_mobile_reserved_controls())
+	var bar_colors := {
+		&"health": Color(0.92, 0.25, 0.28),
+		&"hunger": Color(0.98, 0.62, 0.18),
+		&"thirst": Color(0.25, 0.68, 0.98),
+		&"stamina": Color(0.40, 0.88, 0.48),
+	}
+	for key: StringName in _bars:
+		var bar := _bars[key] as ProgressBar
+		bar.add_theme_stylebox_override("background", _bar_style(Color(0.025, 0.045, 0.06, 0.82)))
+		bar.add_theme_stylebox_override("fill", _bar_style(bar_colors[key]))
+	for index in range(_hotbar_buttons.size()):
+		var slot := _hotbar_buttons[index] as Button
+		slot.add_theme_font_size_override("font_size", 9)
+		slot.add_theme_stylebox_override("normal", _button_style(Color(0.08, 0.20, 0.27, 0.94)))
+		slot.add_theme_stylebox_override("hover", _button_style(Color(0.10, 0.34, 0.43, 0.98)))
+		slot.add_theme_stylebox_override("pressed", _button_style(Color(0.13, 0.40, 0.49, 0.98)))
 
 
-func _create_settings_menu() -> void:
-	_settings_menu = SETTINGS_MENU_SCRIPT.new() as Control
-	_settings_menu.name = "SettingsMenu"
-	add_child(_settings_menu)
+func _connect_scene_signals() -> void:
+	_build_button.pressed.connect(_toggle_build_menu)
+	_inventory_button.pressed.connect(_toggle_inventory)
+	_eat_button.pressed.connect(func() -> void:
+		if _player != null:
+			_player.call("_request_survival_action", "eat")
+	)
+	_drink_button.pressed.connect(func() -> void:
+		if _player != null:
+			_player.call("_request_survival_action", "drink")
+	)
+	$HudRoot/BuildMenu/BuildMenuColumn/RotateButton.pressed.connect(_rotate_build_piece)
+	for index in range(_hotbar_buttons.size()):
+		(_hotbar_buttons[index] as Button).pressed.connect(_activate_hotbar_slot.bind(index))
+	_mobile_controls.connect("movement_changed", _on_touch_movement)
+	_mobile_controls.connect("look_changed", _on_touch_look)
+	_mobile_controls.connect("action_held", _on_touch_action_held)
+	_mobile_controls.connect("action_pressed", _on_touch_action_pressed)
 	_settings_menu.call("set_mobile_controls", _mobile_controls)
 	_settings_menu.connect("opened", _on_settings_opened)
-	_mobile_controls.set_reserved_controls(_get_mobile_reserved_controls())
-	_layout_settings_button()
+	_mobile_controls.call("set_reserved_controls", _get_mobile_reserved_controls())
+	_root.resized.connect(_layout_all)
 
 
 func _get_mobile_reserved_controls() -> Array:
@@ -355,52 +259,6 @@ func _on_settings_opened() -> void:
 
 func _on_game_settings_changed() -> void:
 	_layout_all()
-
-
-func _make_stat_row(parent: VBoxContainer, title: String, icon_texture: Texture2D, fill_color: Color) -> ProgressBar:
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 5)
-	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	parent.add_child(row)
-
-	var icon := TextureRect.new()
-	icon.texture = icon_texture
-	icon.modulate = fill_color
-	icon.custom_minimum_size = Vector2(15.0, 15.0)
-	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	icon.tooltip_text = title
-	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.add_child(icon)
-
-	var bar := ProgressBar.new()
-	bar.min_value = 0.0
-	bar.max_value = 100.0
-	bar.value = 100.0
-	bar.show_percentage = false
-	bar.custom_minimum_size = Vector2(145.0, 9.0)
-	bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	bar.tooltip_text = title
-	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	bar.add_theme_stylebox_override("background", _bar_style(Color(0.025, 0.045, 0.06, 0.82)))
-	bar.add_theme_stylebox_override("fill", _bar_style(fill_color))
-	row.add_child(bar)
-	return bar
-
-
-func _make_consumable_button(label: String, action: String) -> Button:
-	var button := Button.new()
-	button.text = label
-	button.custom_minimum_size = Vector2(54.0, 22.0)
-	button.focus_mode = Control.FOCUS_NONE
-	button.add_theme_font_size_override("font_size", 9)
-	button.add_theme_stylebox_override("normal", _button_style(Color(0.06, 0.13, 0.17, 0.86)))
-	button.add_theme_stylebox_override("hover", _button_style(Color(0.10, 0.24, 0.28, 0.96)))
-	button.pressed.connect(func() -> void:
-		if _player != null:
-			_player.call("_request_survival_action", action)
-	)
-	return button
 
 
 func _update_build_system() -> void:
@@ -441,11 +299,9 @@ func _rebuild_build_menu() -> void:
 	for buildable: PKBuildable in catalog.buildables:
 		if buildable == null or not buildable.in_catalog:
 			continue
-		var button := Button.new()
+		var button := BUILDABLE_BUTTON_SCENE.instantiate() as Button
 		button.text = buildable.get_title()
 		button.tooltip_text = buildable.description
-		button.custom_minimum_size = Vector2(82.0, 34.0)
-		button.focus_mode = Control.FOCUS_ALL
 		button.add_theme_font_size_override("font_size", 10)
 		button.pressed.connect(_select_buildable.bind(buildable))
 		_build_grid.add_child(button)

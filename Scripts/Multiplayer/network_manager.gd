@@ -9,6 +9,7 @@ const SERVER_ID := 1
 const PORT := 7000
 const MAX_PLAYERS := 8
 const PLAYER_SCENE: PackedScene = preload("res://Scenes/Player/Player.tscn")
+const SESSION_INTERFACE_SCENE: PackedScene = preload("res://Scenes/UI/SessionInterface.tscn")
 
 var peer: ENetMultiplayerPeer
 var spawned_players: Dictionary = {}
@@ -397,120 +398,40 @@ func _close_chat() -> void:
 # -----------------------------------------------------------------------------
 
 func _create_session_ui() -> void:
-	_lobby_layer = CanvasLayer.new()
+	_lobby_layer = SESSION_INTERFACE_SCENE.instantiate() as CanvasLayer
 	_lobby_layer.name = "SessionInterface"
 	add_child(_lobby_layer)
-	var root := Control.new()
-	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	root.mouse_filter = Control.MOUSE_FILTER_PASS
-	_lobby_layer.add_child(root)
-
-	_lobby_panel = PanelContainer.new()
-	_lobby_panel.custom_minimum_size = Vector2(410, 360)
-	_lobby_panel.set_anchors_preset(Control.PRESET_CENTER)
-	_lobby_panel.offset_left = -205
-	_lobby_panel.offset_right = 205
-	_lobby_panel.offset_top = -180
-	_lobby_panel.offset_bottom = 180
+	var root := _lobby_layer.get_node("Root") as Control
+	_lobby_panel = root.get_node("LobbyPanel") as PanelContainer
+	_name_input = root.get_node("LobbyPanel/LobbyMenu/NameInput") as LineEdit
+	_address_input = root.get_node("LobbyPanel/LobbyMenu/AddressInput") as LineEdit
+	_status_label = root.get_node("LobbyPanel/LobbyMenu/StatusLabel") as Label
+	_session_panel = root.get_node("SessionPanel") as PanelContainer
+	_session_label = root.get_node("SessionPanel/SessionBox/SessionLabel") as Label
+	_players_label = root.get_node("SessionPanel/SessionBox/PlayersLabel") as Label
+	_chat_panel = root.get_node("ChatPanel") as PanelContainer
+	_chat_button = root.get_node("SessionPanel/SessionBox/SessionButtons/ChatButton") as Button
+	_chat_log = root.get_node("ChatPanel/ChatBox/ChatLog") as RichTextLabel
+	_chat_input = root.get_node("ChatPanel/ChatBox/ChatInputRow/ChatInput") as LineEdit
+	var host_button := root.get_node("LobbyPanel/LobbyMenu/HostButton") as Button
+	var join_button := root.get_node("LobbyPanel/LobbyMenu/JoinButton") as Button
+	var offline_button := root.get_node("LobbyPanel/LobbyMenu/OfflineButton") as Button
+	var leave_button := root.get_node("SessionPanel/SessionBox/SessionButtons/LeaveButton") as Button
+	var send_button := root.get_node("ChatPanel/ChatBox/ChatInputRow/SendButton") as Button
 	_lobby_panel.add_theme_stylebox_override("panel", _make_panel_style())
-	root.add_child(_lobby_panel)
-	var menu := VBoxContainer.new()
-	menu.add_theme_constant_override("separation", 12)
-	_lobby_panel.add_child(menu)
-
-	var title := Label.new()
-	title.text = "ALONE AT OCEAN"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 28)
-	menu.add_child(title)
-	var subtitle := Label.new()
-	subtitle.text = "Sobreviva e construa em conjunto"
-	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	subtitle.add_theme_color_override("font_color", Color(0.68, 0.84, 0.9))
-	menu.add_child(subtitle)
-
-	_name_input = LineEdit.new()
-	_name_input.placeholder_text = "Seu nome (até 20 caracteres)"
-	_name_input.text = "Sobrevivente"
-	menu.add_child(_name_input)
-	_address_input = LineEdit.new()
-	_address_input.placeholder_text = "IP do anfitrião (porta UDP 7000)"
-	_address_input.text = "127.0.0.1"
-	menu.add_child(_address_input)
-
-	var host_button := Button.new()
-	host_button.text = "Criar sessão"
-	host_button.pressed.connect(func() -> void: create_host(_name_input.text))
-	menu.add_child(host_button)
-	var join_button := Button.new()
-	join_button.text = "Entrar por IP"
-	join_button.pressed.connect(func() -> void: join_game(_address_input.text, _name_input.text))
-	menu.add_child(join_button)
-	var offline_button := Button.new()
-	offline_button.text = "Jogar sozinho"
-	offline_button.pressed.connect(func() -> void: start_offline(_name_input.text))
-	menu.add_child(offline_button)
-
-	_status_label = Label.new()
-	_status_label.text = "Escolha como jogar."
-	_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	menu.add_child(_status_label)
-
-	_session_panel = PanelContainer.new()
-	_session_panel.position = Vector2(16, 16)
-	_session_panel.custom_minimum_size = Vector2(255, 120)
 	_session_panel.add_theme_stylebox_override("panel", _make_panel_style())
-	root.add_child(_session_panel)
-	var session_box := VBoxContainer.new()
-	_session_panel.add_child(session_box)
-	_session_label = Label.new()
-	_session_label.text = "Sessão"
-	session_box.add_child(_session_label)
-	_players_label = Label.new()
-	_players_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	session_box.add_child(_players_label)
-	var buttons := HBoxContainer.new()
-	session_box.add_child(buttons)
-	_chat_button = Button.new()
-	_chat_button.text = "Chat"
+	(root.get_node("ChatPanel") as PanelContainer).add_theme_stylebox_override("panel", _make_panel_style())
+	(root.get_node("LobbyPanel/LobbyMenu") as VBoxContainer).add_theme_constant_override("separation", 12)
+	(root.get_node("LobbyPanel/LobbyMenu/Title") as Label).add_theme_font_size_override("font_size", 28)
+	(root.get_node("LobbyPanel/LobbyMenu/Subtitle") as Label).add_theme_color_override("font_color", Color(0.68, 0.84, 0.9))
+	(root.get_node("ChatPanel/ChatBox/ChatTitle") as Label).add_theme_font_size_override("font_size", 18)
+	host_button.pressed.connect(func() -> void: create_host(_name_input.text))
+	join_button.pressed.connect(func() -> void: join_game(_address_input.text, _name_input.text))
+	offline_button.pressed.connect(func() -> void: start_offline(_name_input.text))
 	_chat_button.pressed.connect(_open_chat)
-	buttons.add_child(_chat_button)
-	var leave_button := Button.new()
-	leave_button.text = "Sair"
 	leave_button.pressed.connect(disconnect_game)
-	buttons.add_child(leave_button)
-	_session_panel.visible = false
-
-	_chat_panel = PanelContainer.new()
-	_chat_panel.position = Vector2(16, 150)
-	_chat_panel.custom_minimum_size = Vector2(420, 260)
-	_chat_panel.add_theme_stylebox_override("panel", _make_panel_style())
-	root.add_child(_chat_panel)
-	var chat_box := VBoxContainer.new()
-	_chat_panel.add_child(chat_box)
-	var chat_title := Label.new()
-	chat_title.text = "Chat da sessão"
-	chat_title.add_theme_font_size_override("font_size", 18)
-	chat_box.add_child(chat_title)
-	_chat_log = RichTextLabel.new()
-	_chat_log.custom_minimum_size = Vector2(390, 170)
-	_chat_log.scroll_active = true
-	_chat_log.bbcode_enabled = false
-	chat_box.add_child(_chat_log)
-	var input_row := HBoxContainer.new()
-	chat_box.add_child(input_row)
-	_chat_input = LineEdit.new()
-	_chat_input.placeholder_text = "Escreva uma mensagem…"
-	_chat_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_chat_input.text_submitted.connect(func(_text: String) -> void: _send_chat(); _close_chat())
-	input_row.add_child(_chat_input)
-	var send_button := Button.new()
-	send_button.text = "Enviar"
 	send_button.pressed.connect(func() -> void: _send_chat(); _close_chat())
-	input_row.add_child(send_button)
-	_chat_panel.visible = false
-
 	player_list_changed.connect(_refresh_session_ui)
 
 

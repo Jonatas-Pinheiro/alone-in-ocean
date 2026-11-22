@@ -1,6 +1,7 @@
 extends Node3D
 
 const BUILDING_CATALOG = preload("res://Scenes/Building/BuildingCatalog.gd")
+const BUILDING_HUD_SCENE: PackedScene = preload("res://addons/building_kit/ui/build_hud_layer.tscn")
 
 @export_group("Construção")
 @export var grid_cell_size := Vector3.ONE
@@ -85,11 +86,10 @@ func _initialize_building_kit() -> void:
 		_building_network.register_build_system(build_system)
 
 	if show_building_hud:
-		hud_layer = CanvasLayer.new()
+		hud_layer = BUILDING_HUD_SCENE.instantiate() as CanvasLayer
 		hud_layer.name = "BuildingHUDLayer"
 		scene_root.add_child(hud_layer)
-		build_hud = PKBuildHUD.new()
-		hud_layer.add_child(build_hud)
+		build_hud = hud_layer.get_node("PKBuildHUD") as PKBuildHUD
 		build_hud.bind(build_system)
 	_initializing = false
 

@@ -1,73 +1,55 @@
 class_name PKModeBar
 extends PanelContainer
-## Mode buttons (Build, Move, Demolish, Select, and Upgrade / Repair when the catalog has
-## upgrades or health), the floor level when there are several, and Undo, Rotate, Flip and
-## Cancel buttons for touch screens. Each button shows its key (keyboard or gamepad,
-## following the last input) in its tooltip and as a small number.
+## Mode buttons, floor controls, and touch actions for the building interface.
 
 var system: Node
 var show_touch_buttons := true
-
 var _mode_buttons: Array[Button] = []
-var _row := HBoxContainer.new()
-## Second row: floor buttons and the touch buttons (Undo, Rotate, Flip, Cancel).
-var _tools := HBoxContainer.new()
-var _undo := Button.new()
-var _rotate := Button.new()
-var _flip := Button.new()
-var _cancel := Button.new()
-var _level_down := Button.new()
-var _level_label := Label.new()
-var _level_up := Button.new()
-var _level_box := HBoxContainer.new()
+var _tools: HBoxContainer
+var _undo: Button
+var _rotate: Button
+var _flip: Button
+var _cancel: Button
+var _level_down: Button
+var _level_label: Label
+var _level_up: Button
+var _level_box: HBoxContainer
 var _pad := false
 
 const MODE_KEYS := ["1", "2", "3", "4", "5", "6"]
 const MODE_LABELS := ["Co", "Mo", "De", "Se", "Ap", "Re"]
 
 
-func _init() -> void:
+func _ready() -> void:
 	name = "PKModeBar"
-	_row.add_theme_constant_override(&"separation", 4)
-	_tools.add_theme_constant_override(&"separation", 4)
-	var rows := VBoxContainer.new()
-	rows.add_theme_constant_override(&"separation", 4)
-	rows.add_child(_row)
-	rows.add_child(_tools)
-	add_child(rows)
+	_tools = $Rows/Tools
+	_level_box = $Rows/Tools/LevelBox
+	_level_down = $Rows/Tools/LevelBox/LevelDown
+	_level_label = $Rows/Tools/LevelBox/LevelLabel
+	_level_up = $Rows/Tools/LevelBox/LevelUp
+	_undo = $Rows/Tools/Undo
+	_rotate = $Rows/Tools/Rotate
+	_flip = $Rows/Tools/Flip
+	_cancel = $Rows/Tools/Cancel
 	var group := ButtonGroup.new()
 	for mode in PKBuildController.Mode.size():
-		var button := Button.new()
-		button.toggle_mode = true
+		var button: Button = get_node("Rows/Modes/Mode%d" % mode)
 		button.button_group = group
-		button.focus_mode = Control.FOCUS_NONE
-		button.custom_minimum_size = Vector2(42, 32)
-		button.pressed.connect(func() -> void: system.set_mode(mode))
-		_row.add_child(button)
 		_mode_buttons.append(button)
-	_level_box.add_theme_constant_override(&"separation", 2)
-	for entry in [[_level_down, "-", -1], [_level_up, "+", 1]]:
-		var button: Button = entry[0]
-		button.text = entry[1]
-		button.focus_mode = Control.FOCUS_NONE
-		button.custom_minimum_size = Vector2(30, 34)
-		var step: int = entry[2]
-		button.pressed.connect(func() -> void: system.set_level(system.controller.level + step))
-	_level_box.add_child(_level_down)
-	_level_label.custom_minimum_size = Vector2(70, 0)
-	_level_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_level_box.add_child(_level_label)
-	_level_box.add_child(_level_up)
-	_level_box.add_child(VSeparator.new())
-	_tools.add_child(_level_box)
-	for entry in [[_undo, func() -> void: system.undo()], [_rotate, func() -> void: system.rotate_piece(1)],
-			[_flip, func() -> void: system.flip_piece()], [_cancel, func() -> void: system.cancel()]]:
-		var button: Button = entry[0]
-		button.focus_mode = Control.FOCUS_NONE
-		button.custom_minimum_size = Vector2(34, 28)
-		button.add_theme_font_size_override(&"font_size", 13)
-		button.pressed.connect(entry[1])
-		_tools.add_child(button)
+		button.pressed.connect(func() -> void:
+			if system != null: system.set_mode(mode))
+	_level_down.pressed.connect(func() -> void:
+		if system != null: system.set_level(system.controller.level - 1))
+	_level_up.pressed.connect(func() -> void:
+		if system != null: system.set_level(system.controller.level + 1))
+	_undo.pressed.connect(func() -> void:
+		if system != null: system.undo())
+	_rotate.pressed.connect(func() -> void:
+		if system != null: system.rotate_piece(1))
+	_flip.pressed.connect(func() -> void:
+		if system != null: system.flip_piece())
+	_cancel.pressed.connect(func() -> void:
+		if system != null: system.cancel())
 
 
 func bind(p_system: Node) -> void:
@@ -85,8 +67,7 @@ func set_gamepad_hints(on: bool) -> void:
 
 
 func refresh() -> void:
-	if system == null:
-		return
+	if system == null or _mode_buttons.is_empty(): return
 	var controller: PKBuildController = system.controller
 	var mode: int = controller.mode
 	var has_upgrades := false
