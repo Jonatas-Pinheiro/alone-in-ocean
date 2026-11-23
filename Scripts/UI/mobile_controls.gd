@@ -167,7 +167,7 @@ func _update_stick_visual() -> void:
 func _input(event: InputEvent) -> void:
 	if not touch_enabled or _menu_open:
 		return
-	if GameSettings.is_settings_open():
+	if GameSettings.is_gameplay_ui_open():
 		return
 	if _edit_mode:
 		_handle_layout_edit(event)

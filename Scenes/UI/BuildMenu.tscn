@@ -1,0 +1,38 @@
+[gd_scene format=3]
+
+[node name="BuildMenu" type="PanelContainer"]
+visible = false
+mouse_filter = 1
+
+[node name="BuildMenuColumn" type="VBoxContainer" parent="."]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Header" type="HBoxContainer" parent="BuildMenuColumn"]
+layout_mode = 2
+
+[node name="MenuTitle" type="Label" parent="BuildMenuColumn/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 16
+text = "CONSTRUÇÃO [V]"
+
+[node name="BuildGrid" type="GridContainer" parent="BuildMenuColumn"]
+layout_mode = 2
+size_flags_horizontal = 3
+columns = 2
+theme_override_constants/h_separation = 6
+theme_override_constants/v_separation = 6
+
+[node name="RotateButton" type="Button" parent="BuildMenuColumn"]
+custom_minimum_size = Vector2(0, 34)
+layout_mode = 2
+focus_mode = 2
+text = "Girar peça [R]"
+
+[node name="BuildHint" type="Label" parent="BuildMenuColumn"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.70, 0.82, 0.88, 1)
+theme_override_font_sizes/font_size = 11
+text = "Selecione uma peça e confirme o local. [V] fecha."
+autowrap_mode = 2

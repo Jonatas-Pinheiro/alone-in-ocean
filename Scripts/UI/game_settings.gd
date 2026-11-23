@@ -15,6 +15,8 @@ var hud_scale := 1.0
 var mobile_button_scale := 1.0
 var mobile_button_positions: Dictionary = {}
 var settings_open := false
+var inventory_open := false
+var build_menu_open := false
 
 
 func _ready() -> void:
@@ -36,6 +38,26 @@ func set_settings_open(open: bool) -> void:
 
 func is_settings_open() -> bool:
 	return settings_open
+
+
+func set_inventory_open(open: bool) -> void:
+	inventory_open = open
+
+
+func is_inventory_open() -> bool:
+	return inventory_open
+
+
+func set_build_menu_open(open: bool) -> void:
+	build_menu_open = open
+
+
+func is_build_menu_open() -> bool:
+	return build_menu_open
+
+
+func is_gameplay_ui_open() -> bool:
+	return settings_open or inventory_open or build_menu_open
 
 
 func set_shadows_enabled(enabled: bool) -> void:
