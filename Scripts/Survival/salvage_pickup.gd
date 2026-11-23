@@ -2,6 +2,7 @@ extends Area3D
 class_name SalvagePickup
 
 const SERVER_ID := 1
+const PICKUP_SCALE_MULTIPLIER := 1.35
 const PICKUP_VISUALS := {
 	&"wood": preload("res://Assets/KayKit/RPGToolsBits/gltf/axe.gltf"),
 	&"plastic": preload("res://Assets/KayKit/RPGToolsBits/gltf/rope_bundle_A.gltf"),
@@ -46,7 +47,7 @@ func _ready() -> void:
 		visual.material_override = null
 		var pickup_model := pickup_scene.instantiate() as Node3D
 		pickup_model.name = "KayKitPickupVisual"
-		pickup_model.scale = Vector3.ONE * float(PICKUP_VISUAL_SCALES.get(resource_kind, 0.45))
+		pickup_model.scale = Vector3.ONE * float(PICKUP_VISUAL_SCALES.get(resource_kind, 0.45)) * PICKUP_SCALE_MULTIPLIER
 		visual.add_child(pickup_model)
 	else:
 		var material := StandardMaterial3D.new()
