@@ -1,5 +1,7 @@
 extends Node
 
+signal clock_updated(is_day: bool, clock_minutes: int, seconds_until_transition: int)
+
 const SERVER_ID := 1
 const DAY_DURATION_SECONDS := 12.0 * 60.0
 const NIGHT_DURATION_SECONDS := 12.0 * 60.0
@@ -19,13 +21,7 @@ var _panorama_material: PanoramaSkyMaterial
 var _elapsed_seconds := 0.0
 var _session_active := false
 var _sync_timer := 0.0
-var _last_hud_second := -1
-
-var _hud: CanvasLayer
-var _clock_panel: PanelContainer
-var _time_label: Label
-var _countdown_label: Label
-var _phase_bar: ProgressBar
+var _last_clock_second := -1
 
 
 func _ready() -> void:
@@ -38,16 +34,14 @@ func _ready() -> void:
 		if sky != null:
 			_panorama_material = sky.sky_material as PanoramaSkyMaterial
 	GameSettings.apply_current_scene_preferences()
-	_bind_hud()
-	GameSettings.settings_changed.connect(_on_game_settings_changed)
 	_apply_world_state()
-	_update_hud()
+	_emit_clock_updated()
 
 
 func _process(delta: float) -> void:
 	var session_is_active := _network_manager != null \
-		and _network_manager.has_method("is_session_active") \
-		and bool(_network_manager.call("is_session_active"))
+			and _network_manager.has_method("is_session_active") \
+			and bool(_network_manager.call("is_session_active"))
 	var session_changed := session_is_active != _session_active
 	if session_changed:
 		_session_active = session_is_active
@@ -57,21 +51,20 @@ func _process(delta: float) -> void:
 			_sync_timer = SYNC_INTERVAL_SECONDS
 		else:
 			_sync_timer = 0.0
-			_update_hud_visibility()
 
 	if not _session_active:
 		if session_changed:
 			_apply_world_state()
-			_update_hud()
-			_last_hud_second = int(floor(_elapsed_seconds))
+			_emit_clock_updated()
+			_last_clock_second = int(floor(_elapsed_seconds))
 		return
 
 	_elapsed_seconds = fposmod(_elapsed_seconds + delta, CYCLE_DURATION_SECONDS)
 	_apply_world_state()
-	var hud_second := int(floor(_elapsed_seconds))
-	if hud_second != _last_hud_second:
-		_last_hud_second = hud_second
-		_update_hud()
+	var clock_second := int(floor(_elapsed_seconds))
+	if clock_second != _last_clock_second:
+		_last_clock_second = clock_second
+		_emit_clock_updated()
 
 	if multiplayer.has_multiplayer_peer() and multiplayer.is_server():
 		_sync_timer += delta
@@ -81,23 +74,35 @@ func _process(delta: float) -> void:
 				_receive_clock.rpc(_elapsed_seconds)
 
 
-func _on_game_settings_changed() -> void:
-	_update_hud_visibility()
-
-
-func _update_hud_visibility() -> void:
-	if _hud != null:
-		_hud.visible = _session_active and GameSettings.hud_visible
-
-
 @rpc("authority", "call_remote", "unreliable")
 func _receive_clock(server_elapsed_seconds: float) -> void:
 	if not is_finite(server_elapsed_seconds):
 		return
 	_elapsed_seconds = fposmod(server_elapsed_seconds, CYCLE_DURATION_SECONDS)
 	_apply_world_state()
-	_last_hud_second = int(floor(_elapsed_seconds))
-	_update_hud()
+	_last_clock_second = int(floor(_elapsed_seconds))
+	_emit_clock_updated()
+
+
+func get_clock_state() -> Dictionary:
+	var is_day := _elapsed_seconds < DAY_DURATION_SECONDS
+	var clock_minutes := posmod(START_TIME_MINUTES + int(floor(_elapsed_seconds)), 24 * 60)
+	var seconds_until_transition := DAY_DURATION_SECONDS - _elapsed_seconds \
+		if is_day else CYCLE_DURATION_SECONDS - _elapsed_seconds
+	return {
+		"is_day": is_day,
+		"clock_minutes": clock_minutes,
+		"seconds_until_transition": int(ceil(seconds_until_transition)),
+	}
+
+
+func _emit_clock_updated() -> void:
+	var state := get_clock_state()
+	clock_updated.emit(
+		bool(state["is_day"]),
+		int(state["clock_minutes"]),
+		int(state["seconds_until_transition"])
+	)
 
 
 func _apply_world_state() -> void:
@@ -123,64 +128,3 @@ func _apply_world_state() -> void:
 			environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 			environment.ambient_light_color = NIGHT_AMBIENT_COLOR.lerp(DAY_AMBIENT_COLOR, daylight)
 			environment.ambient_light_energy = lerpf(0.35, 0.9, daylight)
-
-
-func _update_hud() -> void:
-	if _time_label == null:
-		return
-
-	var elapsed_game_minutes := int(floor(_elapsed_seconds))
-	var clock_minutes := posmod(START_TIME_MINUTES + elapsed_game_minutes, 24 * 60)
-	var hour := int(clock_minutes / 60)
-	var minute := clock_minutes % 60
-	var is_day := _elapsed_seconds < DAY_DURATION_SECONDS
-	_time_label.text = "%s  |  %02d:%02d" % ["DIA" if is_day else "NOITE", hour, minute]
-
-	var seconds_until_change := DAY_DURATION_SECONDS - _elapsed_seconds \
-		if is_day else CYCLE_DURATION_SECONDS - _elapsed_seconds
-	var rounded_seconds := int(ceil(seconds_until_change))
-	var transition_name := "Anoitece" if is_day else "Amanhece"
-	_countdown_label.text = "%s em %02d:%02d" % [
-		transition_name,
-		int(rounded_seconds / 60),
-		rounded_seconds % 60,
-	]
-	_phase_bar.value = seconds_until_change
-
-
-func _bind_hud() -> void:
-	_hud = get_parent().get_node_or_null("DayNightHUD") as CanvasLayer
-	if _hud == null:
-		push_warning("DayNightHUD.tscn não foi instanciada na cena World.")
-		return
-	_clock_panel = _hud.get_node("ClockPanel") as PanelContainer
-	_time_label = _hud.get_node("ClockPanel/ClockColumn/TimeLabel") as Label
-	_countdown_label = _hud.get_node("ClockPanel/ClockColumn/CountdownLabel") as Label
-	_phase_bar = _hud.get_node("ClockPanel/ClockColumn/PhaseBar") as ProgressBar
-	_clock_panel.add_theme_stylebox_override("panel", _clock_panel_style())
-	_clock_panel.add_theme_constant_override("margin_left", 12)
-	_clock_panel.add_theme_constant_override("margin_right", 12)
-	_clock_panel.add_theme_constant_override("margin_top", 8)
-	_clock_panel.add_theme_constant_override("margin_bottom", 8)
-	get_viewport().size_changed.connect(_layout_clock_panel)
-	_layout_clock_panel()
-
-
-func _clock_panel_style() -> StyleBoxFlat:
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.035, 0.09, 0.14, 0.94)
-	style.border_color = Color(0.18, 0.58, 0.72, 0.9)
-	style.set_border_width_all(1)
-	style.set_corner_radius_all(8)
-	return style
-
-
-func _layout_clock_panel() -> void:
-	if _clock_panel == null:
-		return
-	if get_viewport().size.x < 680.0:
-		_clock_panel.offset_left = -318.0
-		_clock_panel.offset_right = -70.0
-	else:
-		_clock_panel.offset_left = -252.0
-		_clock_panel.offset_right = -16.0

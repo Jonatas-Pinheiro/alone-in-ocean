@@ -1,7 +1,6 @@
 extends Node3D
 
 const BUILDING_CATALOG = preload("res://Scenes/Building/BuildingCatalog.gd")
-const BUILDING_HUD_SCENE: PackedScene = preload("res://addons/building_kit/ui/build_hud_layer.tscn")
 
 @export_group("Construção")
 @export var grid_cell_size := Vector3.ONE
@@ -9,15 +8,12 @@ const BUILDING_HUD_SCENE: PackedScene = preload("res://addons/building_kit/ui/bu
 @export_flags_3d_physics var terrain_mask: int = 1
 @export_flags_3d_physics var placed_piece_layer: int = 2
 @export var aim_from_screen_center := true
-@export var show_building_hud := true
 
 @export_group("Caixas de validação")
 @export var ramp_bounds := Vector3(3.0, 3.0, 3.0)
 @export var ceiling_bounds := Vector3(3.0, 0.3, 3.0)
 
 var build_system: NetworkedBuildSystem
-var build_hud: PKBuildHUD
-var hud_layer: CanvasLayer
 var _player_camera: Camera3D
 var _building_network: Node
 var _network_manager: Node
@@ -84,13 +80,6 @@ func _initialize_building_kit() -> void:
 
 	if _building_network != null:
 		_building_network.register_build_system(build_system)
-
-	if show_building_hud:
-		hud_layer = BUILDING_HUD_SCENE.instantiate() as CanvasLayer
-		hud_layer.name = "BuildingHUDLayer"
-		scene_root.add_child(hud_layer)
-		build_hud = hud_layer.get_node("PKBuildHUD") as PKBuildHUD
-		build_hud.bind(build_system)
 	_initializing = false
 
 
@@ -100,9 +89,5 @@ func _on_session_ended() -> void:
 	if build_system != null:
 		build_system.queue_free()
 	build_system = null
-	if hud_layer != null:
-		hud_layer.queue_free()
-	hud_layer = null
-	build_hud = null
 	_player_camera = null
 	_initializing = false

@@ -112,7 +112,6 @@ var crouching := false:
 		crouching = value
 		_apply_crouch_pose()
 var display_name := "Sobrevivente"
-var _name_tag: Label3D
 
 ## Replicado pelo servidor (o cliente não simula física, então não sabe se está no chão).
 var grounded := true
@@ -209,7 +208,6 @@ func _enter_tree() -> void:
 func _ready() -> void:
 	add_to_group("players")
 	_mp = multiplayer
-	_create_name_tag()
 	_is_local = owner_peer_id == _mp.get_unique_id()
 	_is_server = _mp.is_server()
 	_is_auth = is_multiplayer_authority()
@@ -219,9 +217,6 @@ func _ready() -> void:
 	if body_model != null:
 		_standing_body_scale = body_model.scale
 		body_model.visible = not _is_local
-		if _name_tag != null:
-			_name_tag.visible = not _is_local
-		GameSettings.apply_player_name_visibility(self, _is_local)
 
 	_yaw = rotation.y
 	_pitch = camera.rotation.x
@@ -269,33 +264,12 @@ func _ready() -> void:
 
 func set_display_name(value: String) -> void:
 	display_name = value.strip_edges().substr(0, 20)
-	if _name_tag != null:
-		_name_tag.text = display_name
-
-
-func set_name_tag_visible(visible: bool) -> void:
-	if _name_tag != null and not _is_local:
-		_name_tag.visible = visible
 
 
 @rpc("authority", "call_local", "reliable")
 func play_visual_action(animation_name: String) -> void:
 	if body_model != null and body_model.has_method("play_action"):
 		body_model.call("play_action", animation_name)
-
-
-func _create_name_tag() -> void:
-	_name_tag = Label3D.new()
-	_name_tag.name = "NameTag"
-	_name_tag.position = Vector3(0.0, 2.35, 0.0)
-	_name_tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	_name_tag.no_depth_test = true
-	_name_tag.font_size = 30
-	_name_tag.pixel_size = 0.01
-	_name_tag.outline_size = 8
-	_name_tag.modulate = Color(0.92, 0.98, 1.0)
-	_name_tag.text = display_name
-	add_child(_name_tag)
 
 
 func _exit_tree() -> void:

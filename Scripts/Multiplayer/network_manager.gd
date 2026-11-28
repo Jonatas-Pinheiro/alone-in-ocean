@@ -4,12 +4,13 @@ signal local_player_ready(player: CharacterBody3D)
 signal player_list_changed
 signal session_started
 signal session_ended
+signal session_status_changed(message: String)
+signal chat_message_received(sender_name: String, text: String)
 
 const SERVER_ID := 1
 const PORT := 7000
 const MAX_PLAYERS := 8
 const PLAYER_SCENE: PackedScene = preload("res://Scenes/Player/Player.tscn")
-const SESSION_INTERFACE_SCENE: PackedScene = preload("res://Scenes/UI/SessionInterface.tscn")
 
 var peer: ENetMultiplayerPeer
 var spawned_players: Dictionary = {}
@@ -18,18 +19,6 @@ var spawn_slots: Dictionary = {}
 var _local_name := "Sobrevivente"
 var _offline_session := false
 var _session_active := false
-var _lobby_layer: CanvasLayer
-var _lobby_panel: PanelContainer
-var _name_input: LineEdit
-var _address_input: LineEdit
-var _status_label: Label
-var _session_panel: PanelContainer
-var _session_label: Label
-var _players_label: Label
-var _chat_panel: PanelContainer
-var _chat_log: RichTextLabel
-var _chat_input: LineEdit
-var _chat_button: Button
 var _chat_lines: Array[String] = []
 var _chat_rate: Dictionary = {}
 
@@ -41,8 +30,12 @@ func _ready() -> void:
 	multiplayer.connected_to_server.connect(_on_connected)
 	multiplayer.connection_failed.connect(_on_connection_failed)
 	multiplayer.server_disconnected.connect(_on_server_disconnected)
-	_create_session_ui()
-	_show_lobby("Escolha como jogar.")
+	call_deferred("_start_default_offline_session")
+
+
+func _start_default_offline_session() -> void:
+	if not _session_active:
+		start_offline()
 
 
 func _exit_tree() -> void:
@@ -55,15 +48,17 @@ func _exit_tree() -> void:
 # -----------------------------------------------------------------------------
 
 func create_host(player_name: String = "Sobrevivente") -> int:
-	if peer != null or _offline_session:
+	if peer != null:
 		return ERR_ALREADY_IN_USE
+	if _offline_session:
+		_switch_from_offline_session()
 
 	_local_name = _clean_name(player_name)
 	peer = ENetMultiplayerPeer.new()
 	var error := peer.create_server(PORT, MAX_PLAYERS - 1)
 	if error != OK:
 		peer = null
-		_show_lobby("Não foi possível abrir a sessão (erro %d)." % error)
+		session_status_changed.emit("Não foi possível abrir a sessão (erro %d)." % error)
 		return error
 
 	multiplayer.multiplayer_peer = peer
@@ -74,8 +69,8 @@ func create_host(player_name: String = "Sobrevivente") -> int:
 	peer_names[SERVER_ID] = _local_name
 	spawn_slots[SERVER_ID] = 0
 	spawn_player(SERVER_ID, 0)
-	_refresh_session_ui()
 	session_started.emit()
+	session_status_changed.emit("Sessão criada na porta UDP %d." % PORT)
 	print("Sessão criada na porta UDP ", PORT)
 	return OK
 
@@ -91,14 +86,16 @@ func start_offline(player_name: String = "Sobrevivente") -> int:
 	peer_names[SERVER_ID] = _local_name
 	spawn_slots[SERVER_ID] = 0
 	spawn_player(SERVER_ID, 0)
-	_refresh_session_ui()
 	session_started.emit()
+	session_status_changed.emit("Jogo solo iniciado.")
 	return OK
 
 
 func join_game(address: String, player_name: String = "Sobrevivente") -> int:
-	if peer != null or _offline_session:
+	if peer != null:
 		return ERR_ALREADY_IN_USE
+	if _offline_session:
+		_switch_from_offline_session()
 	var host := address.strip_edges()
 	if host.is_empty():
 		host = "127.0.0.1"
@@ -107,11 +104,11 @@ func join_game(address: String, player_name: String = "Sobrevivente") -> int:
 	var error := peer.create_client(host, PORT)
 	if error != OK:
 		peer = null
-		_show_lobby("Endereço inválido ou conexão indisponível (erro %d)." % error)
+		session_status_changed.emit("Endereço inválido ou conexão indisponível (erro %d)." % error)
 		return error
 	multiplayer.multiplayer_peer = peer
 	_session_active = true
-	_set_status("Conectando a %s:%d…" % [host, PORT])
+	session_status_changed.emit("Conectando a %s:%d…" % [host, PORT])
 	return OK
 
 
@@ -119,6 +116,15 @@ func disconnect_game() -> void:
 	if peer == null and not _offline_session:
 		return
 	_end_session("Você saiu da sessão.")
+
+
+func _switch_from_offline_session() -> void:
+	_end_session("")
+	var world := get_parent()
+	var old_player := world.get_node_or_null(str(SERVER_ID)) if world != null else null
+	if old_player != null:
+		old_player.name = "LeavingOfflinePlayer"
+		old_player.queue_free()
 
 
 func is_session_active() -> bool:
@@ -147,12 +153,13 @@ func _end_session(message: String) -> void:
 	if old_peer != null:
 		old_peer.close()
 	session_ended.emit()
-	_show_lobby(message)
+	if not message.is_empty():
+		session_status_changed.emit(message)
 	player_list_changed.emit()
 
 
 func _on_connected() -> void:
-	_set_status("Conectado; entrando no mundo…")
+	session_status_changed.emit("Conectado; entrando no mundo…")
 	register_player_name.rpc_id(SERVER_ID, _local_name)
 
 
@@ -192,7 +199,6 @@ func spawn_player(id: int, spawn_slot: int) -> void:
 	print("Jogador criado: %s (%d)" % [player.display_name, id])
 	if id == multiplayer.get_unique_id():
 		local_player_ready.emit(player)
-	_refresh_session_ui()
 
 
 @rpc("authority", "call_local", "reliable")
@@ -210,7 +216,6 @@ func remove_player(id: int) -> void:
 	spawned_players.erase(id)
 	spawn_slots.erase(id)
 	player_list_changed.emit()
-	_refresh_session_ui()
 
 
 @rpc("authority", "call_local", "reliable")
@@ -230,7 +235,6 @@ func register_player_name(player_name: String) -> void:
 	_apply_player_name(sender_id, clean_name)
 	sync_player_name.rpc(sender_id, clean_name)
 	player_list_changed.emit()
-	_refresh_session_ui()
 
 
 @rpc("authority", "call_remote", "reliable")
@@ -238,7 +242,6 @@ func sync_player_name(id: int, player_name: String) -> void:
 	peer_names[id] = _clean_name(player_name)
 	_apply_player_name(id, str(peer_names[id]))
 	player_list_changed.emit()
-	_refresh_session_ui()
 
 
 func _apply_player_name(id: int, player_name: String) -> void:
@@ -266,7 +269,6 @@ func _on_peer_connected(id: int) -> void:
 	if building_network != null:
 		building_network.send_snapshot_to_peer(id)
 	player_list_changed.emit()
-	_refresh_session_ui()
 
 
 func _allocate_spawn_slot(peer_id: int) -> int:
@@ -301,7 +303,6 @@ func _on_peer_disconnected(id: int) -> void:
 	remove_player_rpc.rpc(id)
 	peer_names.erase(id)
 	player_list_changed.emit()
-	_refresh_session_ui()
 
 
 func _clear_spawned_players() -> void:
@@ -326,16 +327,14 @@ func _is_valid_player(peer_id: int) -> bool:
 # CHAT DA SESSÃO
 # -----------------------------------------------------------------------------
 
-func _send_chat() -> void:
-	var text := _chat_input.text.strip_edges()
-	_chat_input.clear()
-	if text.is_empty():
+func send_chat_message(text: String) -> void:
+	var clean_text := text.strip_edges().replace("\n", " ").replace("\r", " ").substr(0, 180)
+	if not _session_active or clean_text.is_empty():
 		return
-	text = text.substr(0, 180)
 	if multiplayer.is_server():
-		_broadcast_chat(SERVER_ID, _local_name, text)
+		_broadcast_chat(SERVER_ID, _local_name, clean_text)
 	elif multiplayer.has_multiplayer_peer():
-		request_chat.rpc_id(SERVER_ID, text)
+		request_chat.rpc_id(SERVER_ID, clean_text)
 
 
 @rpc("any_peer", "call_remote", "reliable")
@@ -374,119 +373,4 @@ func _append_chat(sender_name: String, text: String) -> void:
 	_chat_lines.append("%s: %s" % [sender_name, text])
 	while _chat_lines.size() > 8:
 		_chat_lines.pop_front()
-	if _chat_log != null:
-		_chat_log.text = "\n".join(_chat_lines)
-		_chat_log.scroll_to_line(_chat_log.get_line_count())
-
-
-func _open_chat() -> void:
-	if not _session_active:
-		return
-	_chat_panel.visible = true
-	_chat_input.grab_focus()
-	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-
-
-func _close_chat() -> void:
-	_chat_panel.visible = false
-	if _session_active and get_parent().has_node(str(multiplayer.get_unique_id())):
-		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-
-
-# -----------------------------------------------------------------------------
-# INTERFACE
-# -----------------------------------------------------------------------------
-
-func _create_session_ui() -> void:
-	_lobby_layer = SESSION_INTERFACE_SCENE.instantiate() as CanvasLayer
-	_lobby_layer.name = "SessionInterface"
-	add_child(_lobby_layer)
-	var root := _lobby_layer.get_node("Root") as Control
-	_lobby_panel = root.get_node("LobbyPanel") as PanelContainer
-	_name_input = root.get_node("LobbyPanel/LobbyMenu/NameInput") as LineEdit
-	_address_input = root.get_node("LobbyPanel/LobbyMenu/AddressInput") as LineEdit
-	_status_label = root.get_node("LobbyPanel/LobbyMenu/StatusLabel") as Label
-	_session_panel = root.get_node("SessionPanel") as PanelContainer
-	_session_label = root.get_node("SessionPanel/SessionBox/SessionLabel") as Label
-	_players_label = root.get_node("SessionPanel/SessionBox/PlayersLabel") as Label
-	_chat_panel = root.get_node("ChatPanel") as PanelContainer
-	_chat_button = root.get_node("SessionPanel/SessionBox/SessionButtons/ChatButton") as Button
-	_chat_log = root.get_node("ChatPanel/ChatBox/ChatLog") as RichTextLabel
-	_chat_input = root.get_node("ChatPanel/ChatBox/ChatInputRow/ChatInput") as LineEdit
-	var host_button := root.get_node("LobbyPanel/LobbyMenu/HostButton") as Button
-	var join_button := root.get_node("LobbyPanel/LobbyMenu/JoinButton") as Button
-	var offline_button := root.get_node("LobbyPanel/LobbyMenu/OfflineButton") as Button
-	var leave_button := root.get_node("SessionPanel/SessionBox/SessionButtons/LeaveButton") as Button
-	var send_button := root.get_node("ChatPanel/ChatBox/ChatInputRow/SendButton") as Button
-	_lobby_panel.add_theme_stylebox_override("panel", _make_panel_style())
-	_session_panel.add_theme_stylebox_override("panel", _make_panel_style())
-	(root.get_node("ChatPanel") as PanelContainer).add_theme_stylebox_override("panel", _make_panel_style())
-	(root.get_node("LobbyPanel/LobbyMenu") as VBoxContainer).add_theme_constant_override("separation", 12)
-	(root.get_node("LobbyPanel/LobbyMenu/Title") as Label).add_theme_font_size_override("font_size", 28)
-	(root.get_node("LobbyPanel/LobbyMenu/Subtitle") as Label).add_theme_color_override("font_color", Color(0.68, 0.84, 0.9))
-	(root.get_node("ChatPanel/ChatBox/ChatTitle") as Label).add_theme_font_size_override("font_size", 18)
-	host_button.pressed.connect(func() -> void: create_host(_name_input.text))
-	join_button.pressed.connect(func() -> void: join_game(_address_input.text, _name_input.text))
-	offline_button.pressed.connect(func() -> void: start_offline(_name_input.text))
-	_chat_button.pressed.connect(_open_chat)
-	leave_button.pressed.connect(disconnect_game)
-	_chat_input.text_submitted.connect(func(_text: String) -> void: _send_chat(); _close_chat())
-	send_button.pressed.connect(func() -> void: _send_chat(); _close_chat())
-	player_list_changed.connect(_refresh_session_ui)
-
-
-func _make_panel_style() -> StyleBoxFlat:
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.035, 0.09, 0.14, 0.96)
-	style.border_color = Color(0.18, 0.58, 0.72, 0.9)
-	style.set_border_width_all(2)
-	style.set_corner_radius_all(10)
-	style.content_margin_left = 18
-	style.content_margin_right = 18
-	style.content_margin_top = 16
-	style.content_margin_bottom = 16
-	return style
-
-
-func _show_lobby(message: String) -> void:
-	if _lobby_panel == null:
-		return
-	_lobby_panel.visible = true
-	_session_panel.visible = false
-	_chat_panel.visible = false
-	_status_label.text = message
-	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-
-
-func _set_status(message: String) -> void:
-	if _status_label != null:
-		_status_label.text = message
-
-
-func _refresh_session_ui() -> void:
-	if _session_panel == null:
-		return
-	_session_panel.visible = _session_active and get_parent().has_node(str(multiplayer.get_unique_id()))
-	if not _session_panel.visible:
-		return
-	_lobby_panel.visible = false
-	_session_label.text = "Sessão %s · porta UDP %d" % ["online" if peer != null else "local", PORT]
-	var names: Array[String] = []
-	for id in spawned_players.keys():
-		names.append(get_player_name(int(id)))
-	names.sort()
-	_players_label.text = "Jogadores (%d/%d):\n%s" % [spawned_players.size(), MAX_PLAYERS, ", ".join(names)]
-
-
-func _input(event: InputEvent) -> void:
-	if GameSettings.is_settings_open():
-		return
-	if not _session_active:
-		return
-	if event is InputEventKey and event.pressed and not event.echo:
-		if event.keycode == KEY_T and not _chat_panel.visible:
-			_open_chat()
-			get_viewport().set_input_as_handled()
-		elif event.is_action_pressed("ui_cancel") and _chat_panel.visible:
-			_close_chat()
-			get_viewport().set_input_as_handled()
+	chat_message_received.emit(sender_name, text)
